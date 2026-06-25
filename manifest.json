@@ -1,0 +1,28 @@
+{
+    "name": "School Attendance Verification",
+    "short_name": "AttendanceApp",
+    "description": "Lecturer check-in and attendance verification system using GPS and 3D geofencing.",
+    "start_url": "/muyiwa/lecturer_app.php",
+    "scope": "/muyiwa/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#1e272e",
+    "theme_color": "#3a7bd5",
+    "lang": "en",
+    "icons": [
+        {
+            "src": "/muyiwa/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/muyiwa/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "screenshots": [],
+    "categories": ["education", "productivity"]
+}
