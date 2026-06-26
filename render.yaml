@@ -5,12 +5,12 @@ services:
     plan: free
     envVars:
       - key: DB_HOST
-        sync: false
+        sync: false           # Set in Render Dashboard (pooler host)
       - key: DB_PORT
-        value: 5432
+        value: 6543           # Supabase pooler port (Transaction mode)
       - key: DB_USER
-        value: postgres
+        sync: false           # Set in Render Dashboard (postgres.[project-ref])
       - key: DB_PASS
-        sync: false
+        sync: false           # Set in Render Dashboard (your DB password)
       - key: DB_NAME
         value: postgres

@@ -5,11 +5,22 @@
  * Academic Project - 2026
  */
 
-// Database Configuration (Uses environment variables on Render, or falls back to local config)
-define('DB_HOST', getenv('DB_HOST') ?: 'db.xxxxxxxxxxxxxxxxxxxx.supabase.co'); // Replace with Supabase Reference Host
-define('DB_PORT', getenv('DB_PORT') ?: '5432');
-define('DB_USER', getenv('DB_USER') ?: 'postgres');
-define('DB_PASS', getenv('DB_PASS') ?: 'YOUR_SUPABASE_DATABASE_PASSWORD');    // Replace with Supabase Database Password
+// ============================================================
+// DATABASE CONFIGURATION
+// Uses Supabase CONNECTION POOLER to avoid IPv6 issues on Render.
+// Env variables are set in Render Dashboard → Environment.
+// ============================================================
+
+// Pooler host (from Supabase Dashboard → Project Settings → Database → Connection Pooling)
+define('DB_HOST', getenv('DB_HOST') ?: 'aws-0-eu-central-1.pooler.supabase.com');
+
+// Pooler uses port 6543 (Transaction mode) — NOT 5432
+define('DB_PORT', getenv('DB_PORT') ?: '6543');
+
+// Pooler username format is:  postgres.[project-ref]
+define('DB_USER', getenv('DB_USER') ?: 'postgres.qikyorppbzokktianreo');
+
+define('DB_PASS', getenv('DB_PASS') ?: 'YOUR_SUPABASE_DATABASE_PASSWORD');
 define('DB_NAME', getenv('DB_NAME') ?: 'postgres');
 
 // System Configuration
@@ -20,18 +31,19 @@ define('TIMEZONE', 'Africa/Lagos');
 // Set timezone in PHP
 date_default_timezone_set(TIMEZONE);
 
-// Create connection using PDO (PostgreSQL)
+// Create connection using PDO (PostgreSQL via Supabase Pooler)
 try {
+    // sslmode=require is mandatory for Supabase
     $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";sslmode=require";
     $conn = new PDO($dsn, DB_USER, DB_PASS, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);
-    
-    // Set Timezone in PostgreSQL session (equivalent to MySQL SET time_zone)
+
+    // Set Timezone in PostgreSQL session
     $conn->exec("SET TIME ZONE 'Africa/Lagos'");
 } catch (PDOException $e) {
-    die("Database Connection Error: " . $e->getMessage() . "<br>Please check your Supabase credentials in config.php.");
+    die("Database Connection Error: " . $e->getMessage() . "<br>Please check your Supabase pooler credentials.");
 }
 
 /**
