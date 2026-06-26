@@ -3,15 +3,15 @@
  * sw.js - Service Worker for PWA offline support and caching
  */
 
-const CACHE_NAME = 'attendance-pwa-v1';
+const CACHE_NAME = 'attendance-pwa-v2';
 
 // Core assets to cache for offline access
 const PRECACHE_ASSETS = [
-    '/muyiwa/lecturer_app.php',
-    '/muyiwa/login.php',
-    '/muyiwa/manifest.json',
-    '/muyiwa/icons/icon-192.png',
-    '/muyiwa/icons/icon-512.png',
+    '/lecturer_app.php',
+    '/login.php',
+    '/manifest.json',
+    '/icons/icon-192.png',
+    '/icons/icon-512.png',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
@@ -76,7 +76,7 @@ self.addEventListener('fetch', (event) => {
                         return cachedResponse;
                     }
                     // Fallback for uncached navigation requests
-                    return caches.match('/muyiwa/lecturer_app.php');
+                    return caches.match('/lecturer_app.php');
                 });
             })
     );

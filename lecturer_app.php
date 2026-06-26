@@ -36,7 +36,7 @@ $scheduled_classes = $stmt->fetchAll();
     <title>Attendance App — Lecturer Portal</title>
 
     <!-- ======= PWA MANIFEST ======= -->
-    <link rel="manifest" href="/muyiwa/manifest.json">
+    <link rel="manifest" href="/manifest.json">
 
     <!-- ======= PWA THEME ======= -->
     <meta name="theme-color" content="#3a7bd5">
@@ -46,13 +46,13 @@ $scheduled_classes = $stmt->fetchAll();
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AttendanceApp">
-    <link rel="apple-touch-icon" href="/muyiwa/icons/icon-512.png">
+    <link rel="apple-touch-icon" href="/icons/icon-512.png">
     <!-- iOS Splash Screens (optional but recommended for best experience) -->
-    <link rel="apple-touch-startup-image" href="/muyiwa/icons/icon-512.png">
+    <link rel="apple-touch-startup-image" href="/icons/icon-512.png">
 
     <!-- ======= STANDARD FAVICON ======= -->
-    <link rel="icon" type="image/png" sizes="192x192" href="/muyiwa/icons/icon-192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/muyiwa/icons/icon-512.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 
     <!-- ======= SEO / DESCRIPTION ======= -->
     <meta name="description" content="GPS-verified lecturer check-in portal with 3D floor-level geofencing.">
@@ -64,7 +64,7 @@ $scheduled_classes = $stmt->fetchAll();
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/muyiwa/sw.js')
+                navigator.serviceWorker.register('/sw.js')
                     .then((reg) => console.log('[PWA] Service Worker registered:', reg.scope))
                     .catch((err) => console.warn('[PWA] Service Worker registration failed:', err));
             });
