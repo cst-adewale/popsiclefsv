@@ -1,19 +1,18 @@
 -- School Attendance Verification System Database Schema (PostgreSQL for Supabase)
 
 -- Drop tables in reverse order of foreign key dependencies to prevent errors
-DROP TRIGGER IF EXISTS prevent_attendance_update ON attendance_submissions;
-DROP TRIGGER IF EXISTS prevent_attendance_delete ON attendance_submissions;
-DROP FUNCTION IF EXISTS func_prevent_attendance_update;
-DROP FUNCTION IF EXISTS func_prevent_attendance_delete;
+-- Using CASCADE automatically drops all associated triggers, constraints, and dependencies.
+DROP TABLE IF EXISTS attendance_reports CASCADE;
+DROP TABLE IF EXISTS system_settings CASCADE;
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS live_locations CASCADE;
+DROP TABLE IF EXISTS attendance_submissions CASCADE;
+DROP TABLE IF EXISTS scheduled_classes CASCADE;
+DROP TABLE IF EXISTS lecture_halls CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
-DROP TABLE IF EXISTS attendance_reports;
-DROP TABLE IF EXISTS system_settings;
-DROP TABLE IF EXISTS audit_logs;
-DROP TABLE IF EXISTS live_locations;
-DROP TABLE IF EXISTS attendance_submissions;
-DROP TABLE IF EXISTS scheduled_classes;
-DROP TABLE IF EXISTS lecture_halls;
-DROP TABLE IF EXISTS users;
+DROP FUNCTION IF EXISTS func_prevent_attendance_update() CASCADE;
+DROP FUNCTION IF EXISTS func_prevent_attendance_delete() CASCADE;
 
 -- ============================================
 -- 1. USERS TABLE (Admins and Lecturers)
