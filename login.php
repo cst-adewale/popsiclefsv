@@ -235,6 +235,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <button type="submit" class="btn-login">SIGN IN</button>
         </form>
 
+        <div style="margin-top: 20px; font-size: 14px; color: #7f8c8d;">
+            New lecturer? <a href="register.php" style="color: #3a7bd5; text-decoration: none; font-weight: 600;">Register here</a>
+        </div>
+
         <div class="credentials-hint">
             💡 <strong>Demo Credentials:</strong><br>
             • Lecturer: <code>lecturer1</code> / <code>lecturer123</code><br>

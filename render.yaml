@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: school-attendance-system
+    name: muyiwafsv
     env: docker
     plan: free
     envVars:
