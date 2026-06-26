@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: school-attendance-system
+    env: docker
+    plan: free
+    envVars:
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        value: 5432
+      - key: DB_USER
+        value: postgres
+      - key: DB_PASS
+        sync: false
+      - key: DB_NAME
+        value: postgres

@@ -5,12 +5,12 @@
  * Academic Project - 2026
  */
 
-// Database Configuration (User should update these with their Supabase Connection Details)
-define('DB_HOST', 'db.xxxxxxxxxxxxxxxxxxxx.supabase.co'); // Replace with Supabase Reference Host
-define('DB_PORT', '5432');
-define('DB_USER', 'postgres');
-define('DB_PASS', 'YOUR_SUPABASE_DATABASE_PASSWORD');    // Replace with Supabase Database Password
-define('DB_NAME', 'postgres');
+// Database Configuration (Uses environment variables on Render, or falls back to local config)
+define('DB_HOST', getenv('DB_HOST') ?: 'db.xxxxxxxxxxxxxxxxxxxx.supabase.co'); // Replace with Supabase Reference Host
+define('DB_PORT', getenv('DB_PORT') ?: '5432');
+define('DB_USER', getenv('DB_USER') ?: 'postgres');
+define('DB_PASS', getenv('DB_PASS') ?: 'YOUR_SUPABASE_DATABASE_PASSWORD');    // Replace with Supabase Database Password
+define('DB_NAME', getenv('DB_NAME') ?: 'postgres');
 
 // System Configuration
 define('MAX_DISTANCE_TOLERANCE', 50); // default horizontal tolerance (meters)
