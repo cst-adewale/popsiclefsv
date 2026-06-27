@@ -14,6 +14,8 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $identifier = sanitizeInput($_POST['identifier'] ?? ($_POST['email'] ?? $_POST['username'] ?? ''));
     $password = $_POST['password'] ?? '';
+    $device_token = sanitizeInput($_POST['device_token'] ?? '');
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
     if (!empty($identifier) && !empty($password)) {
         try {
             $stmt = $conn->prepare("
@@ -34,6 +36,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['user_id']   = $user['user_id'];
                 $_SESSION['full_name'] = $user['full_name'];
                 $_SESSION['role']      = $user['role'];
+                if (!empty($device_token)) {
+                    bindDeviceToUser($user['user_id'], $device_token, $user_agent);
+                }
                 header('Location: ' . ($user['role'] === 'admin' ? 'admin_dashboard.php' : 'lecturer_app.php'));
                 exit;
             } else {
@@ -108,6 +113,7 @@ body{font-family:'Outfit',sans-serif;background:#F7F8FA;min-height:100vh;display
     <?php endif; ?>
 
     <form method="POST" action="login.php">
+      <input type="hidden" name="device_token" id="device_token">
       <div class="field">
         <label>Username or email</label>
         <input type="text" name="identifier" placeholder="jdoe or you@caleb.edu.ng" value="<?php echo htmlspecialchars($_POST['identifier'] ?? ($_POST['email'] ?? $_POST['username'] ?? '')); ?>" required autofocus>
@@ -127,5 +133,18 @@ body{font-family:'Outfit',sans-serif;background:#F7F8FA;min-height:100vh;display
 
   <div class="footer-note">Caleb FSV · 2026</div>
 </div>
+<script>
+(function() {
+  const key = 'caleb_fsv_device';
+  let token = localStorage.getItem(key);
+  if (!token) {
+    token = (crypto && crypto.randomUUID) ? crypto.randomUUID() : 'dev-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+    localStorage.setItem(key, token);
+  }
+  document.cookie = key + '=' + encodeURIComponent(token) + '; path=/; max-age=31536000; samesite=lax';
+  const input = document.getElementById('device_token');
+  if (input) input.value = token;
+})();
+</script>
 </body>
 </html>

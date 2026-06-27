@@ -75,6 +75,15 @@ logAuditTrail(
     $_SERVER['REMOTE_ADDR']
 );
 
+createNotification(
+    $lecturer_id,
+    'attendance',
+    'Attendance submitted',
+    'Your attendance submission was recorded with status ' . $result['verification_status'] . '.',
+    'attendance_submissions',
+    $result['submission_id']
+);
+
 // Respond with verification outcome details
 sendJsonResponse([
     'status' => 'SUCCESS',

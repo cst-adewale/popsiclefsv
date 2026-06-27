@@ -30,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $lecturer_number = isset($_POST['lecturer_number']) ? sanitizeInput($_POST['lecturer_number']) : '';
     $password = isset($_POST['password']) ? $_POST['password'] : '';
     $confirm_password = isset($_POST['confirm_password']) ? $_POST['confirm_password'] : '';
+    $device_token = sanitizeInput($_POST['device_token'] ?? '');
     
     // Optional profile picture processing
     $profile_pic = null;
@@ -101,6 +102,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             // Log audit trail
                             if ($new_user_id) {
                                 logAuditTrail($new_user_id, 'USER_SIGNUP', 'users', $new_user_id);
+                                if (!empty($device_token)) {
+                                    bindDeviceToUser($new_user_id, $device_token, $_SERVER['HTTP_USER_AGENT'] ?? '');
+                                }
+                                createNotification($new_user_id, 'account', 'Account created', 'Your lecturer account has been created successfully.', 'users', $new_user_id);
                             }
                             
                             $success_message = 'Registration successful! You can now log in.';
@@ -325,6 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php endif; ?>
 
         <form action="register.php" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="device_token" id="device_token">
             <div class="form-grid">
                 <div class="form-group">
                     <label for="username">Username *</label>
@@ -434,4 +440,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         });
     </script>
 </body>
+<script>
+(function() {
+    const key = 'caleb_fsv_device';
+    let token = localStorage.getItem(key);
+    if (!token) {
+        token = (crypto && crypto.randomUUID) ? crypto.randomUUID() : 'dev-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+        localStorage.setItem(key, token);
+    }
+    document.cookie = key + '=' + encodeURIComponent(token) + '; path=/; max-age=31536000; samesite=lax';
+    const input = document.getElementById('device_token');
+    if (input) input.value = token;
+})();
+</script>
 </html>

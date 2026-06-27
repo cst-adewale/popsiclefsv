@@ -55,6 +55,8 @@ if ($action === 'signin') {
             VALUES (?, ?, NOW(), ?, ?, ?)
         ");
         $stmt->execute([$lecturer_id, $current_date, $latitude, $longitude, $altitude]);
+        createNotification($lecturer_id, 'shift', 'Sign-in recorded', 'Your day sign-in has been logged successfully.', 'lecturer_shifts', $lecturer_id);
+        createBroadcastNotification('shift', 'Lecturer signed in', 'A lecturer has signed in for the day.', 'lecturer_shifts', $lecturer_id);
 
         echo json_encode(['status' => 'SUCCESS', 'message' => 'Successfully signed in for the day.']);
     } catch (PDOException $e) {
@@ -96,6 +98,9 @@ if ($action === 'signin') {
             ");
             $stmt->execute([$latitude, $longitude, $altitude, $shift['shift_id']]);
         }
+
+        createNotification($lecturer_id, 'shift', 'Sign-out recorded', 'Your day sign-out has been logged successfully.', 'lecturer_shifts', $shift['shift_id']);
+        createBroadcastNotification('shift', 'Lecturer signed out', 'A lecturer has signed out for the day.', 'lecturer_shifts', $shift['shift_id']);
 
         echo json_encode(['status' => 'SUCCESS', 'message' => 'Successfully signed out for the day.']);
     } catch (PDOException $e) {

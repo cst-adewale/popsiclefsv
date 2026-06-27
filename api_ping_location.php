@@ -74,6 +74,8 @@ try {
                     WHERE shift_id = ?
                 ");
                 $stmt_out->execute([$sign_out_time, $latitude, $longitude, $altitude, $active_shift['shift_id']]);
+                createNotification($lecturer_id, 'shift', 'Auto sign-out', 'You were automatically signed out because you left the university boundary.', 'lecturer_shifts', $active_shift['shift_id']);
+                createBroadcastNotification('shift', 'Lecturer auto signed out', 'A lecturer was automatically signed out after leaving the campus boundary.', 'lecturer_shifts', $active_shift['shift_id']);
             }
         }
     }

@@ -40,6 +40,7 @@ if ($action === 'create') {
         
         $new_id = $conn->lastInsertId('scheduled_classes_class_id_seq');
         logAuditTrail($lecturer_id, 'CREATE_SCHEDULE', 'scheduled_classes', $new_id ?: 0);
+        createNotification($lecturer_id, 'schedule', 'Schedule created', "Your class {$course_code} has been scheduled.", 'scheduled_classes', $new_id ?: null);
 
         echo json_encode(['status' => 'SUCCESS', 'message' => 'Schedule created successfully.']);
     } catch (PDOException $e) {
@@ -70,6 +71,7 @@ if ($action === 'create') {
         $stmt->execute([$hall_id, $course_code, $course_title, $start_time, $end_time, $scheduled_date, $class_id, $lecturer_id]);
 
         logAuditTrail($lecturer_id, 'EDIT_SCHEDULE', 'scheduled_classes', $class_id);
+        createNotification($lecturer_id, 'schedule', 'Schedule updated', "Your class {$course_code} schedule has been updated.", 'scheduled_classes', $class_id);
 
         echo json_encode(['status' => 'SUCCESS', 'message' => 'Schedule updated successfully.']);
     } catch (PDOException $e) {
@@ -95,6 +97,7 @@ if ($action === 'create') {
         $stmt->execute([$class_id, $lecturer_id]);
 
         logAuditTrail($lecturer_id, 'DELETE_SCHEDULE', 'scheduled_classes', $class_id);
+        createNotification($lecturer_id, 'schedule', 'Schedule deleted', "A scheduled class has been deleted.", 'scheduled_classes', $class_id);
 
         echo json_encode(['status' => 'SUCCESS', 'message' => 'Schedule deleted successfully.']);
     } catch (PDOException $e) {

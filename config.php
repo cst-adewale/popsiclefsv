@@ -402,4 +402,48 @@ function getStoredUserPassword($userRow) {
 
     return null;
 }
+
+function ensureDeviceToken() {
+    if (!isset($_COOKIE['caleb_fsv_device'])) {
+        return null;
+    }
+
+    return sanitizeInput($_COOKIE['caleb_fsv_device']);
+}
+
+function bindDeviceToUser($userId, $deviceToken, $userAgent = '') {
+    global $conn;
+
+    if (empty($deviceToken)) {
+        return false;
+    }
+
+    $stmt = $conn->prepare("
+        INSERT INTO device_bindings (user_id, device_token, user_agent, trusted, first_seen, last_seen)
+        VALUES (?, ?, ?, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id, device_token)
+        DO UPDATE SET last_seen = CURRENT_TIMESTAMP, user_agent = EXCLUDED.user_agent, trusted = TRUE
+    ");
+    $stmt->execute([$userId, $deviceToken, $userAgent]);
+    return true;
+}
+
+function createNotification($userId, $type, $title, $message, $relatedTable = null, $relatedId = null) {
+    global $conn;
+
+    $stmt = $conn->prepare("
+        INSERT INTO system_notifications (user_id, notification_type, title, message, related_table, related_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ");
+    $stmt->execute([$userId, $type, $title, $message, $relatedTable, $relatedId]);
+}
+
+function createBroadcastNotification($type, $title, $message, $relatedTable = null, $relatedId = null) {
+    global $conn;
+
+    $users = $conn->query("SELECT user_id FROM users WHERE is_active = TRUE")->fetchAll();
+    foreach ($users as $user) {
+        createNotification($user['user_id'], $type, $title, $message, $relatedTable, $relatedId);
+    }
+}
 ?>

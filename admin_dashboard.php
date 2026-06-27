@@ -11,6 +11,66 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     exit;
 }
 
+if (isset($_GET['export']) && $_GET['export'] === 'attendance_csv') {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="attendance_export_' . date('Y-m-d_H-i-s') . '.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['Submission ID','Lecturer','Course Code','Hall','Distance (m)','Status','Timestamp','Anomalous','Description']);
+    $rows = $conn->query("
+        SELECT sub.submission_id, u.full_name AS lecturer_name, sc.course_code, lh.hall_name,
+               sub.distance_from_assigned_location, sub.verification_status, sub.server_timestamp,
+               sub.is_anomalous, sub.submission_description
+        FROM attendance_submissions sub
+        JOIN scheduled_classes sc ON sub.class_id = sc.class_id
+        JOIN users u ON sub.lecturer_id = u.user_id
+        JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
+        ORDER BY sub.server_timestamp DESC
+    ")->fetchAll();
+    foreach ($rows as $row) {
+        fputcsv($out, [
+            $row['submission_id'],
+            $row['lecturer_name'],
+            $row['course_code'],
+            $row['hall_name'],
+            $row['distance_from_assigned_location'],
+            $row['verification_status'],
+            $row['server_timestamp'],
+            $row['is_anomalous'] ? 'YES' : 'NO',
+            $row['submission_description']
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
+if (isset($_GET['export']) && $_GET['export'] === 'lecturers_csv') {
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="lecturers_export_' . date('Y-m-d_H-i-s') . '.csv"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['User ID','Full Name','Email','Faculty','Department','Lecturer Number','Status']);
+    $rows = $conn->query("SELECT user_id,full_name,email,faculty,department,lecturer_number,is_active FROM users WHERE role='lecturer' ORDER BY full_name ASC")->fetchAll();
+    foreach ($rows as $row) {
+        fputcsv($out, [
+            $row['user_id'],
+            $row['full_name'],
+            $row['email'],
+            $row['faculty'],
+            $row['department'],
+            $row['lecturer_number'],
+            $row['is_active'] ? 'Active' : 'Inactive'
+        ]);
+    }
+    fclose($out);
+    exit;
+}
+
+if (isset($_GET['mark_notifications_read'])) {
+    $stmt = $conn->prepare("UPDATE system_notifications SET is_read = TRUE WHERE user_id = ?");
+    $stmt->execute([$current_admin_id]);
+    header('Location: admin_dashboard.php');
+    exit;
+}
+
 /* ── AJAX: Lecturer details ────────────────────────────────── */
 if (isset($_GET['get_lecturer_details'])) {
     try {
@@ -102,6 +162,9 @@ try {
 } catch(PDOException $e) {}
 
 $all_lecturers = $conn->query("SELECT user_id,full_name,department,faculty,lecturer_number,profile_pic,is_active FROM users WHERE role='lecturer' ORDER BY full_name ASC")->fetchAll();
+$current_admin_id = intval($_SESSION['user_id']);
+$recent_notifications = $conn->query("SELECT notification_id, title, message, notification_type, is_read, created_at FROM system_notifications WHERE user_id = {$current_admin_id} ORDER BY created_at DESC LIMIT 10")->fetchAll();
+$unread_notification_count = $conn->query("SELECT COUNT(*) FROM system_notifications WHERE user_id = {$current_admin_id} AND is_read = FALSE")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -377,7 +440,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
 
       <div class="section-head">
         Recent attendance check-ins
-        <button class="btn-outline">Export CSV</button>
+        <a class="btn-outline" href="admin_dashboard.php?export=attendance_csv" style="text-decoration:none;display:inline-flex;align-items:center">Export CSV</a>
       </div>
       <div class="card">
         <?php if (count($attendance_logs) === 0): ?>
@@ -436,6 +499,28 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
             <div style="padding:20px;text-align:center;color:#8B93A1;font-size:12px">Loading…</div>
           </div>
         </div>
+      </div>
+
+      <div class="section-head" style="margin-top:20px">
+        Recent notifications
+        <a class="btn-outline" href="admin_dashboard.php?export=lecturers_csv" style="text-decoration:none;display:inline-flex;align-items:center">Export Lecturers</a>
+      </div>
+      <div class="card">
+        <?php if (count($recent_notifications) === 0): ?>
+          <div style="padding:32px;text-align:center;color:#8B93A1;font-size:13px">No notifications yet.</div>
+        <?php else: ?>
+          <div style="display:grid;gap:10px;padding:16px">
+            <?php foreach ($recent_notifications as $note): ?>
+              <div style="padding:12px 14px;border:1px solid #E5E8EE;border-radius:10px;background:<?php echo $note['is_read'] ? '#fff' : '#F7F8FA'; ?>">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:4px">
+                  <strong style="font-size:13px"><?php echo htmlspecialchars($note['title']); ?></strong>
+                  <span style="font-size:11px;color:#8B93A1"><?php echo date('H:i, d M', strtotime($note['created_at'])); ?></span>
+                </div>
+                <div style="font-size:12px;color:#4B5263;line-height:1.5"><?php echo htmlspecialchars($note['message']); ?></div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
       </div>
     </div>
 
