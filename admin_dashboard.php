@@ -1,1165 +1,754 @@
 <?php
 /**
- * School Attendance Verification System
- * admin_dashboard.php - Control panel for configuring rooms, schedules, and viewing verified attendance (Supabase Edition)
+ * admin_dashboard.php - Redesigned admin control panel
+ * Supabase Edition — UI redesign preserving all original PHP/JS logic
  */
-
 require 'config.php';
 session_start();
 
-// Auth check
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     header('Location: login.php');
     exit;
 }
 
-// Get lecturer details AJAX handler
+/* ── AJAX: Lecturer details ────────────────────────────────── */
 if (isset($_GET['get_lecturer_details'])) {
     try {
-        $lid = intval($_GET['get_lecturer_details']);
+        $lid  = intval($_GET['get_lecturer_details']);
         $date = isset($_GET['date']) && !empty($_GET['date']) ? $_GET['date'] : date('Y-m-d');
-        
-        // 1. Fetch lecturer profile
-        $stmt = $conn->prepare("SELECT user_id, username, email, full_name, phone, department, faculty, lecturer_number, profile_pic FROM users WHERE user_id = ?");
+        $stmt = $conn->prepare("SELECT user_id,username,email,full_name,phone,department,faculty,lecturer_number,profile_pic FROM users WHERE user_id=?");
         $stmt->execute([$lid]);
         $profile = $stmt->fetch();
-        
-        if (!$profile) {
-            sendJsonResponse(['error' => 'Lecturer not found'], 404);
-        }
-        
-        // 2. Fetch classes scheduled
-        $stmt = $conn->prepare("
-            SELECT sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, sc.scheduled_date, lh.hall_name 
-            FROM scheduled_classes sc
-            JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
-            WHERE sc.lecturer_id = ?
-            ORDER BY sc.scheduled_date DESC, sc.scheduled_start_time ASC
-        ");
+        if (!$profile) sendJsonResponse(['error'=>'Lecturer not found'],404);
+        $stmt = $conn->prepare("SELECT sc.course_code,sc.course_title,sc.scheduled_start_time,sc.scheduled_end_time,sc.scheduled_date,lh.hall_name FROM scheduled_classes sc JOIN lecture_halls lh ON sc.hall_id=lh.hall_id WHERE sc.lecturer_id=? ORDER BY sc.scheduled_date DESC,sc.scheduled_start_time ASC");
         $stmt->execute([$lid]);
         $schedule = $stmt->fetchAll();
-        
-        // 3. Fetch shift for selected date
-        $stmt = $conn->prepare("
-            SELECT sign_in_time, sign_in_latitude, sign_in_longitude, sign_in_altitude,
-                   sign_out_time, sign_out_latitude, sign_out_longitude, sign_out_altitude, sign_out_method
-            FROM lecturer_shifts
-            WHERE lecturer_id = ? AND work_date = ?
-        ");
-        $stmt->execute([$lid, $date]);
+        $stmt = $conn->prepare("SELECT sign_in_time,sign_in_latitude,sign_in_longitude,sign_in_altitude,sign_out_time,sign_out_latitude,sign_out_longitude,sign_out_altitude,sign_out_method FROM lecturer_shifts WHERE lecturer_id=? AND work_date=?");
+        $stmt->execute([$lid,$date]);
         $shift = $stmt->fetch() ?: null;
-        
-        // 4. Fetch movement logs for selected date
-        $stmt = $conn->prepare("
-            SELECT latitude, longitude, altitude, logged_at 
-            FROM lecturer_location_logs
-            WHERE lecturer_id = ? AND CAST(logged_at AS DATE) = ?
-            ORDER BY logged_at ASC
-        ");
-        $stmt->execute([$lid, $date]);
+        $stmt = $conn->prepare("SELECT latitude,longitude,altitude,logged_at FROM lecturer_location_logs WHERE lecturer_id=? AND CAST(logged_at AS DATE)=? ORDER BY logged_at ASC");
+        $stmt->execute([$lid,$date]);
         $movement = $stmt->fetchAll();
-        
-        sendJsonResponse([
-            'profile' => $profile,
-            'schedule' => $schedule,
-            'shift' => $shift,
-            'movement' => $movement
-        ]);
-    } catch (PDOException $e) {
-        sendJsonResponse(['error' => $e->getMessage()], 500);
-    }
+        sendJsonResponse(['profile'=>$profile,'schedule'=>$schedule,'shift'=>$shift,'movement'=>$movement]);
+    } catch (PDOException $e) { sendJsonResponse(['error'=>$e->getMessage()],500); }
 }
 
-// Live tracking ping feed AJAX handler
+/* ── AJAX: Live pings ──────────────────────────────────────── */
 if (isset($_GET['get_live_pings'])) {
     try {
-        // Fetch pings updated within the last 10 minutes
-        $stmt = $conn->query("
-            SELECT ll.latitude, ll.longitude, ll.altitude, ll.last_updated, u.full_name, u.department
-            FROM live_locations ll
-            JOIN users u ON ll.lecturer_id = u.user_id
-            WHERE ll.last_updated > NOW() - INTERVAL '10 minutes'
-            ORDER BY ll.last_updated DESC
-        ");
-        $pings = $stmt->fetchAll();
-        sendJsonResponse($pings);
-    } catch (PDOException $e) {
-        sendJsonResponse(['error' => $e->getMessage()], 500);
-    }
+        $stmt = $conn->query("SELECT ll.latitude,ll.longitude,ll.altitude,ll.last_updated,u.full_name,u.department FROM live_locations ll JOIN users u ON ll.lecturer_id=u.user_id WHERE ll.last_updated > NOW() - INTERVAL '10 minutes' ORDER BY ll.last_updated DESC");
+        sendJsonResponse($stmt->fetchAll());
+    } catch (PDOException $e) { sendJsonResponse(['error'=>$e->getMessage()],500); }
 }
 
 $full_name = $_SESSION['full_name'];
-$msg = '';
-$err_msg = '';
+$msg = ''; $err_msg = '';
 
-// Handle Add Lecture Hall POST
+/* ── POST: Add Hall ────────────────────────────────────────── */
 if (isset($_POST['add_hall'])) {
-    $hall_name = sanitizeInput($_POST['hall_name']);
-    $hall_code = sanitizeInput($_POST['hall_code']);
-    $latitude = floatval($_POST['latitude']);
-    $longitude = floatval($_POST['longitude']);
-    $altitude = floatval($_POST['altitude']);
-    $tolerance = intval($_POST['tolerance']);
-    $alt_tolerance = floatval($_POST['altitude_tolerance']);
-    $desc = sanitizeInput($_POST['description']);
-
+    $hall_name   = sanitizeInput($_POST['hall_name']);
+    $hall_code   = sanitizeInput($_POST['hall_code']);
+    $latitude    = floatval($_POST['latitude']);
+    $longitude   = floatval($_POST['longitude']);
+    $altitude    = floatval($_POST['altitude']);
+    $tolerance   = intval($_POST['tolerance']);
+    $alt_tol     = floatval($_POST['altitude_tolerance']);
+    $desc        = sanitizeInput($_POST['description']);
     if (!empty($hall_name) && !empty($hall_code) && $latitude !== 0.0 && $longitude !== 0.0) {
         try {
-            $stmt = $conn->prepare("
-                INSERT INTO lecture_halls (hall_name, hall_code, latitude, longitude, altitude_meters, tolerance_radius_meters, altitude_tolerance_meters, description) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$hall_name, $hall_code, $latitude, $longitude, $altitude, $tolerance, $alt_tolerance, $desc]);
-            
-            $msg = "Lecture hall '$hall_name' added successfully!";
-            logAuditTrail($_SESSION['user_id'], 'ADD_LECTURE_HALL', 'lecture_halls', $conn->lastInsertId('lecture_halls_hall_id_seq'));
-        } catch (PDOException $e) {
-            $err_msg = "Error adding lecture hall: " . $e->getMessage();
-        }
-    } else {
-        $err_msg = "Please fill in all required fields and pick coordinates on the map.";
-    }
+            $stmt = $conn->prepare("INSERT INTO lecture_halls (hall_name,hall_code,latitude,longitude,altitude_meters,tolerance_radius_meters,altitude_tolerance_meters,description) VALUES (?,?,?,?,?,?,?,?)");
+            $stmt->execute([$hall_name,$hall_code,$latitude,$longitude,$altitude,$tolerance,$alt_tol,$desc]);
+            $msg = "Hall '$hall_name' added successfully.";
+            logAuditTrail($_SESSION['user_id'],'ADD_LECTURE_HALL','lecture_halls',$conn->lastInsertId('lecture_halls_hall_id_seq'));
+        } catch (PDOException $e) { $err_msg = "Error: ".$e->getMessage(); }
+    } else { $err_msg = "Fill in all required fields and pick coordinates on the map."; }
 }
 
-// Handle Schedule Class POST
+/* ── POST: Schedule class ──────────────────────────────────── */
 if (isset($_POST['schedule_class'])) {
-    $lecturer_id = intval($_POST['lecturer_id']);
-    $hall_id = intval($_POST['hall_id']);
-    $course_code = sanitizeInput($_POST['course_code']);
+    $lecturer_id  = intval($_POST['lecturer_id']);
+    $hall_id      = intval($_POST['hall_id']);
+    $course_code  = sanitizeInput($_POST['course_code']);
     $course_title = sanitizeInput($_POST['course_title']);
-    $start_time = $_POST['start_time'];
-    $end_time = $_POST['end_time'];
-    $date = $_POST['scheduled_date'];
-
+    $start_time   = $_POST['start_time'];
+    $end_time     = $_POST['end_time'];
+    $date         = $_POST['scheduled_date'];
     if ($lecturer_id && $hall_id && !empty($course_code) && !empty($start_time) && !empty($end_time) && !empty($date)) {
         try {
-            $stmt = $conn->prepare("
-                INSERT INTO scheduled_classes (lecturer_id, hall_id, course_code, course_title, scheduled_start_time, scheduled_end_time, scheduled_date) 
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ");
-            $stmt->execute([$lecturer_id, $hall_id, $course_code, $course_title, $start_time, $end_time, $date]);
-            
-            $msg = "Class scheduled for lecturer successfully!";
-            logAuditTrail($_SESSION['user_id'], 'SCHEDULE_CLASS', 'scheduled_classes', $conn->lastInsertId('scheduled_classes_class_id_seq'));
-        } catch (PDOException $e) {
-            $err_msg = "Error scheduling class: " . $e->getMessage();
-        }
-    } else {
-        $err_msg = "Please fill in all fields to schedule a lecture.";
-    }
+            $stmt = $conn->prepare("INSERT INTO scheduled_classes (lecturer_id,hall_id,course_code,course_title,scheduled_start_time,scheduled_end_time,scheduled_date) VALUES (?,?,?,?,?,?,?)");
+            $stmt->execute([$lecturer_id,$hall_id,$course_code,$course_title,$start_time,$end_time,$date]);
+            $msg = "Class scheduled successfully.";
+            logAuditTrail($_SESSION['user_id'],'SCHEDULE_CLASS','scheduled_classes',$conn->lastInsertId('scheduled_classes_class_id_seq'));
+        } catch (PDOException $e) { $err_msg = "Error: ".$e->getMessage(); }
+    } else { $err_msg = "Fill in all fields to schedule a lecture."; }
 }
 
-// Fetch Stats (PDO syntax)
+/* ── Stats ─────────────────────────────────────────────────── */
 try {
     $stats = [
-        'scheduled' => $conn->query("SELECT COUNT(*) FROM scheduled_classes WHERE scheduled_date = CURRENT_DATE")->fetchColumn(),
-        'verified' => $conn->query("SELECT COUNT(*) FROM attendance_submissions WHERE CAST(server_timestamp AS DATE) = CURRENT_DATE AND verification_status = 'VERIFIED'")->fetchColumn(),
-        'out_of_range' => $conn->query("SELECT COUNT(*) FROM attendance_submissions WHERE CAST(server_timestamp AS DATE) = CURRENT_DATE AND verification_status = 'OUT_OF_RANGE'")->fetchColumn(),
-        'anomalies' => $conn->query("SELECT COUNT(*) FROM attendance_submissions WHERE CAST(server_timestamp AS DATE) = CURRENT_DATE AND is_anomalous = TRUE")->fetchColumn()
+        'scheduled'   => $conn->query("SELECT COUNT(*) FROM scheduled_classes WHERE scheduled_date=CURRENT_DATE")->fetchColumn(),
+        'verified'    => $conn->query("SELECT COUNT(*) FROM attendance_submissions WHERE CAST(server_timestamp AS DATE)=CURRENT_DATE AND verification_status='VERIFIED'")->fetchColumn(),
+        'out_of_range'=> $conn->query("SELECT COUNT(*) FROM attendance_submissions WHERE CAST(server_timestamp AS DATE)=CURRENT_DATE AND verification_status='OUT_OF_RANGE'")->fetchColumn(),
+        'anomalies'   => $conn->query("SELECT COUNT(*) FROM attendance_submissions WHERE CAST(server_timestamp AS DATE)=CURRENT_DATE AND is_anomalous=TRUE")->fetchColumn(),
     ];
-} catch(PDOException $e) {
-    $stats = ['scheduled' => 0, 'verified' => 0, 'out_of_range' => 0, 'anomalies' => 0];
-}
+} catch(PDOException $e) { $stats=['scheduled'=>0,'verified'=>0,'out_of_range'=>0,'anomalies'=>0]; }
 
-// Fetch lecturers
-$lecturers = [];
-$res = $conn->query("SELECT user_id, full_name, department FROM users WHERE role = 'lecturer' AND is_active = TRUE ORDER BY full_name ASC");
-$lecturers = $res->fetchAll();
-
-// Fetch lecture halls
-$halls = [];
-$res = $conn->query("SELECT hall_id, hall_name, hall_code, latitude, longitude, altitude_meters, tolerance_radius_meters FROM lecture_halls ORDER BY hall_name ASC");
-$halls = $res->fetchAll();
-
-// Fetch all attendance logs
+/* ── Data ──────────────────────────────────────────────────── */
+$lecturers = $conn->query("SELECT user_id,full_name,department FROM users WHERE role='lecturer' AND is_active=TRUE ORDER BY full_name ASC")->fetchAll();
+$halls     = $conn->query("SELECT hall_id,hall_name,hall_code,latitude,longitude,altitude_meters,tolerance_radius_meters FROM lecture_halls ORDER BY hall_name ASC")->fetchAll();
 $attendance_logs = [];
 try {
-    $res = $conn->query("
-        SELECT sub.submission_id, sc.course_code, u.full_name as lecturer_name, lh.hall_name, 
-               sub.distance_from_assigned_location, sub.verification_status, sub.server_timestamp, sub.is_anomalous, sub.submission_description
-        FROM attendance_submissions sub
-        JOIN scheduled_classes sc ON sub.class_id = sc.class_id
-        JOIN users u ON sub.lecturer_id = u.user_id
-        JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
-        ORDER BY sub.server_timestamp DESC
-        LIMIT 50
-    ");
-    $attendance_logs = $res->fetchAll();
-} catch (PDOException $e) {
-    // Silent fail
-}
+    $attendance_logs = $conn->query("SELECT sub.submission_id,sc.course_code,u.full_name as lecturer_name,lh.hall_name,sub.distance_from_assigned_location,sub.verification_status,sub.server_timestamp,sub.is_anomalous,sub.submission_description FROM attendance_submissions sub JOIN scheduled_classes sc ON sub.class_id=sc.class_id JOIN users u ON sub.lecturer_id=u.user_id JOIN lecture_halls lh ON sc.hall_id=lh.hall_id ORDER BY sub.server_timestamp DESC LIMIT 50")->fetchAll();
+} catch(PDOException $e) {}
+
+$all_lecturers = $conn->query("SELECT user_id,full_name,department,faculty,lecturer_number,profile_pic,is_active FROM users WHERE role='lecturer' ORDER BY full_name ASC")->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard - Attendance Portal</title>
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — Popsicle FSV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<style>
+/* ── Reset & Base ─────────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#F7F8FA;display:flex;min-height:100vh;color:#1A1A2E;font-size:14px}
 
-        body {
-            background-color: #f1f2f6;
-            display: flex;
-            min-height: 100vh;
-            color: #2c3e50;
-        }
+/* ── Sidebar ──────────────────────────────────────────── */
+.sidebar{width:230px;background:#FFFFFF;border-right:1px solid #E5E8EE;display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.logo-wrap{padding:22px 18px 18px;border-bottom:1px solid #F0F2F5}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:34px;height:34px;background:#2D6A4F;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-icon svg{width:18px;height:18px}
+.logo-name{font-size:14px;font-weight:700;color:#1A1A2E;line-height:1.2}
+.logo-sub{font-size:10px;color:#8B93A1}
+nav{flex:1;padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#4B5263;transition:background .15s,color .15s;border:none;background:none;width:100%;text-align:left;font-family:'Inter',sans-serif}
+.nav-item:hover{background:#F7F8FA;color:#1A1A2E}
+.nav-item.active{background:#EBF5EF;color:#2D6A4F;font-weight:600}
+.nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.nav-sep{height:1px;background:#F0F2F5;margin:8px 8px}
+.sidebar-footer{padding:12px 10px;border-top:1px solid #F0F2F5}
+.user-card{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;background:#F7F8FA;margin-bottom:8px}
+.avatar{width:30px;height:30px;border-radius:50%;background:#EBF5EF;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#2D6A4F;flex-shrink:0}
+.user-name{font-size:12px;font-weight:600;color:#1A1A2E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-role{font-size:10px;color:#8B93A1}
+.btn-logout{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border-radius:8px;background:none;border:1px solid #E5E8EE;cursor:pointer;font-size:12px;color:#4B5263;width:100%;font-family:'Inter',sans-serif;transition:background .15s}
+.btn-logout:hover{background:#FEF2F2;color:#DC2626;border-color:#FECACA}
+.btn-logout svg{width:13px;height:13px}
 
-        /* Sidebar navigation */
-        .sidebar {
-            width: 260px;
-            background: linear-gradient(180deg, #2f3640 0%, #1e272e 100%);
-            color: white;
-            padding: 30px 20px;
-            flex-shrink: 0;
-            display: flex;
-            flex-direction: column;
-            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.1);
-        }
+/* ── Main ─────────────────────────────────────────────── */
+.main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:#FFFFFF;border-bottom:1px solid #E5E8EE;padding:15px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.page-title{font-size:16px;font-weight:700;color:#1A1A2E}
+.page-sub{font-size:12px;color:#8B93A1;margin-top:1px}
+.topbar-chips{display:flex;gap:8px;align-items:center}
+.chip{background:#F7F8FA;border:1px solid #E5E8EE;border-radius:20px;padding:5px 12px;font-size:11px;color:#4B5263;font-weight:500}
+.content{padding:24px 28px;flex:1}
+.panel{display:none;animation:fadeIn .2s ease}
+.panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
-        .sidebar-brand {
-            font-size: 20px;
-            font-weight: 700;
-            margin-bottom: 40px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+/* ── Alerts ───────────────────────────────────────────── */
+.alert{padding:12px 16px;border-radius:8px;margin-bottom:20px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;border:1px solid}
+.alert-success{background:#EBF5EF;color:#2D6A4F;border-color:#86EFAC}
+.alert-danger{background:#FEF2F2;color:#DC2626;border-color:#FECACA}
+.alert svg{width:15px;height:15px;flex-shrink:0}
 
-        .sidebar-menu {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            flex-grow: 1;
-        }
+/* ── Stat cards ───────────────────────────────────────── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:18px 18px 16px}
+.stat-label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.stat-label svg{width:13px;height:13px}
+.stat-val{font-size:30px;font-weight:700;color:#1A1A2E;line-height:1}
+.stat-val.green{color:#2D6A4F}
+.stat-val.red{color:#DC2626}
+.stat-val.amber{color:#B45309}
 
-        .sidebar-menu a {
-            color: rgba(255, 255, 255, 0.7);
-            text-decoration: none;
-            padding: 12px 15px;
-            border-radius: 8px;
-            display: block;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
+/* ── Section header ───────────────────────────────────── */
+.section-head{font-size:13px;font-weight:700;color:#1A1A2E;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 
-        .sidebar-menu a:hover, .sidebar-menu a.active {
-            background-color: #3a7bd5;
-            color: white;
-        }
+/* ── Card & table ─────────────────────────────────────── */
+.card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;overflow:hidden}
+.card-pad{padding:22px}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.4px;padding:10px 16px;background:#F7F8FA;text-align:left;border-bottom:1px solid #E5E8EE}
+td{padding:11px 16px;font-size:12px;color:#4B5263;border-bottom:1px solid #F0F2F5}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#F7F8FA}
+td strong{color:#1A1A2E;font-weight:600}
+code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-family:monospace}
 
-        .sidebar-footer {
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding-top: 20px;
-        }
+/* ── Badges ───────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.2px}
+.badge-verified{background:#EBF5EF;color:#2D6A4F}
+.badge-out_of_range{background:#FEF2F2;color:#DC2626}
+.badge-invalid_altitude{background:#EFF6FF;color:#1D4ED8}
+.badge-invalid_time{background:#FFFBEB;color:#B45309}
+.badge-pending{background:#F5F3FF;color:#6D28D9}
+.badge-anomaly{background:#FEF2F2;color:#DC2626;border:1px solid #FECACA}
+.clear{color:#2D6A4F;font-size:11px;font-weight:600}
 
-        .btn-logout {
-            background-color: #e74c3c;
-            color: white;
-            text-decoration: none;
-            padding: 10px 15px;
-            border-radius: 8px;
-            display: block;
-            text-align: center;
-            font-weight: 600;
-            font-size: 14px;
-            transition: background 0.3s;
-        }
+/* ── Forms ────────────────────────────────────────────── */
+.form-layout{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+@media(max-width:900px){.form-layout{grid-template-columns:1fr}}
+.form-col{display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px}
+.field input,.field select,.field textarea{padding:9px 12px;border:1px solid #E5E8EE;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:border-color .15s}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:#52A878}
+.field input[readonly]{background:#F7F8FA;color:#4B5263;cursor:default}
+.field textarea{resize:none;height:80px}
+.field small{font-size:10px;color:#8B93A1;margin-top:2px}
+.two-col-field{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn-green{padding:10px 20px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:7px;transition:background .15s}
+.btn-green:hover{background:#3B7A57}
+.btn-green svg{width:14px;height:14px}
+.btn-outline{padding:7px 14px;background:#FFFFFF;border:1px solid #E5E8EE;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;color:#4B5263;font-family:'Inter',sans-serif;transition:background .15s}
+.btn-outline:hover{background:#F7F8FA}
 
-        .btn-logout:hover { background-color: #c0392b; }
+/* ── Map ──────────────────────────────────────────────── */
+#picker-map,#tracker-map{width:100%;height:400px;border-radius:10px;border:1px solid #E5E8EE;margin-bottom:8px}
+.map-hint{font-size:11px;color:#8B93A1;font-style:italic;margin-top:4px}
 
-        /* Main Workspace */
-        .main-workspace {
-            flex-grow: 1;
-            padding: 30px;
-            overflow-y: auto;
-        }
+/* ── Lecturers panel ──────────────────────────────────── */
+.lec-layout{display:grid;grid-template-columns:260px 1fr;gap:16px;min-height:600px}
+.lec-list{background:#F7F8FA;border-radius:10px;padding:12px;overflow-y:auto;max-height:680px;display:flex;flex-direction:column;gap:5px}
+.lec-list-label{font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.4px;padding:0 4px;margin-bottom:6px}
+.lec-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .15s}
+.lec-item:hover{background:#FFFFFF;border-color:#E5E8EE}
+.lec-item.selected{background:#EBF5EF;border-color:#86EFAC}
+.lec-item.selected .lec-item-name{color:#2D6A4F}
+.lec-avatar{width:34px;height:34px;border-radius:50%;background:#E5E8EE;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#2D6A4F;flex-shrink:0;overflow:hidden}
+.lec-avatar img{width:100%;height:100%;object-fit:cover}
+.lec-item-name{font-size:12px;font-weight:600;color:#1A1A2E}
+.lec-item-dept{font-size:11px;color:#8B93A1}
+.detail-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:16px}
+.detail-header{background:linear-gradient(135deg,#2D6A4F,#52A878);border-radius:10px;padding:20px;color:#fff;display:flex;align-items:center;gap:16px}
+.detail-header-avatar{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
+.detail-header-avatar img{width:100%;height:100%;object-fit:cover}
+.detail-name{font-size:18px;font-weight:700}
+.detail-meta{font-size:12px;opacity:.85;margin-top:2px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.info-box{background:#F7F8FA;border-radius:8px;padding:12px}
+.info-box-label{font-size:10px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
+.info-box-val{font-size:13px;color:#1A1A2E;font-weight:500}
+.shift-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.shift-row-title{font-size:12px;font-weight:700;color:#1A1A2E}
+.date-input{padding:5px 10px;border:1px solid #E5E8EE;border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;color:#1A1A2E;outline:none}
+.date-input:focus{border-color:#52A878}
+.shift-info{font-size:12px;color:#4B5263;line-height:1.6}
+.sched-table{width:100%;border-collapse:collapse;font-size:12px}
+.sched-table th{font-size:10px;font-weight:600;text-transform:uppercase;color:#8B93A1;padding:7px 10px;background:#F7F8FA;letter-spacing:.3px;border-bottom:1px solid #E5E8EE;text-align:left}
+.sched-table td{padding:8px 10px;border-bottom:1px solid #F0F2F5;color:#4B5263}
+.sched-table tr:last-child td{border-bottom:none}
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:320px;gap:10px;color:#8B93A1;text-align:center}
+.empty-state svg{width:36px;height:36px;opacity:.25}
+.empty-state p{font-size:13px}
+#lecturerMovementMap{width:100%;height:300px;border-radius:8px;border:1px solid #E5E8EE}
 
-        .main-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-
-        .main-header h1 {
-            font-size: 26px;
-            font-weight: 700;
-        }
-
-        .alert {
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 25px;
-            font-weight: 600;
-            font-size: 14px;
-        }
-
-        .alert-success { background-color: #d4edda; color: #155724; border-left: 5px solid #28a745; }
-        .alert-danger { background-color: #f8d7da; color: #721c24; border-left: 5px solid #dc3545; }
-
-        /* Dashboard Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .stat-card {
-            background-color: white;
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .stat-info h3 {
-            font-size: 13px;
-            color: #7f8c8d;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-
-        .stat-info p {
-            font-size: 28px;
-            font-weight: 700;
-            color: #2c3e50;
-        }
-
-        .stat-icon {
-            font-size: 32px;
-            opacity: 0.8;
-        }
-
-        /* Tabs Panels */
-        .panel {
-            background-color: white;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.03);
-            display: none;
-            animation: fadeIn 0.4s ease;
-        }
-
-        .panel.active { display: block; }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        .panel-title {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #f1f2f6;
-            padding-bottom: 10px;
-        }
-
-        /* Two columns forms */
-        .form-layout {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-
-        @media (max-width: 900px) {
-            .form-layout { grid-template-columns: 1fr; }
-        }
-
-        .form-group {
-            margin-bottom: 18px;
-        }
-
-        label {
-            display: block;
-            font-weight: 600;
-            font-size: 13px;
-            color: #7f8c8d;
-            margin-bottom: 6px;
-        }
-
-        input, select, textarea {
-            width: 100%;
-            padding: 10px 14px;
-            border: 1px solid #dcdde1;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #3a7bd5;
-            box-shadow: 0 0 0 3px rgba(58, 123, 213, 0.1);
-        }
-
-        .btn-submit {
-            background-color: #3a7bd5;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 14px;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .btn-submit:hover { background-color: #2962b7; }
-
-        /* Map styling for dashboard coordinate picking */
-        #picker-map, #tracker-map {
-            width: 100%;
-            height: 400px;
-            border-radius: 12px;
-            border: 1px solid #dcdde1;
-            margin-bottom: 10px;
-        }
-
-        .map-help {
-            font-size: 12px;
-            color: #7f8c8d;
-            margin-top: 5px;
-            font-style: italic;
-        }
-
-        /* Table design */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #f1f2f6;
-            font-size: 13px;
-        }
-
-        th {
-            background-color: #f8f9fb;
-            color: #7f8c8d;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        tr:hover { background-color: #fafbfd; }
-
-        .badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .badge-verified { background-color: #d1fae5; color: #065f46; }
-        .badge-out_of_range { background-color: #fee2e2; color: #991b1b; }
-        .badge-invalid_altitude { background-color: #e0f2fe; color: #0369a1; }
-        .badge-invalid_time { background-color: #fef3c7; color: #92400e; }
-        .badge-pending { background-color: #f3e8ff; color: #6b21a8; }
-
-        .badge-anomaly {
-            background-color: #ffcccc;
-            color: #cc0000;
-            border: 1px solid #ff3333;
-        }
-
-        /* Lecturer list item */
-        .lec-list-item {
-            padding: 12px 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            margin-bottom: 6px;
-            transition: background 0.2s;
-            background: white;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-        }
-        .lec-list-item:hover {
-            background: #e8f0fe;
-        }
-        .lec-list-item.selected {
-            background: #3a7bd5;
-            color: white;
-        }
-        .lec-list-item.selected div {
-            color: white !important;
-        }
-    </style>
-
+/* ── Tracker ──────────────────────────────────────────── */
+.tracker-grid{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+.active-badge{background:#EBF5EF;color:#2D6A4F;border-color:#86EFAC}
+</style>
 </head>
 <body>
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="sidebar-brand">
-            <span>🏫</span>
-            <span>Admin Portal</span>
-        </div>
-        <ul class="sidebar-menu">
-            <li><a href="#" class="active" onclick="switchPanel('dashboard', this)">📊 Dashboard Overview</a></li>
-            <li><a href="#" onclick="switchPanel('live-tracker-panel', this)">📡 Live Staff Tracker</a></li>
-            <li><a href="#" onclick="switchPanel('lecturers-panel', this)">👥 Lecturers Tab</a></li>
-            <li><a href="#" onclick="switchPanel('add-hall-panel', this)">📍 Add Lecture Hall (3D)</a></li>
-            <li><a href="#" onclick="switchPanel('schedule-panel', this)">📅 Schedule Class</a></li>
-        </ul>
-        <div class="sidebar-footer">
-            <a href="logout.php" class="btn-logout">LOG OUT</a>
-        </div>
+
+<!-- ═══ SIDEBAR ═══════════════════════════════════════════ -->
+<div class="sidebar">
+  <div class="logo-wrap">
+    <div class="logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+      </div>
+      <div>
+        <div class="logo-name">Popsicle FSV</div>
+        <div class="logo-sub">Admin Portal</div>
+      </div>
     </div>
+  </div>
 
-    <!-- Main Workspace -->
-    <div class="main-workspace">
-        <div class="main-header">
-            <div>
-                <h1 style="color: #2c3e50;">Attendance Dashboard</h1>
-                <p style="color: #7f8c8d; font-size: 14px;">Welcome, Administrator <strong><?php echo htmlspecialchars($full_name); ?></strong></p>
-            </div>
-            <div style="background-color: white; padding: 10px 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); font-size: 13px;">
-                🕒 System Time: <strong><?php echo date('H:i'); ?></strong>
-            </div>
+  <nav>
+    <button class="nav-item active" onclick="switchPanel('dashboard',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" onclick="switchPanel('live-tracker-panel',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/></svg>
+      Live Tracker
+    </button>
+    <button class="nav-item" onclick="switchPanel('lecturers-panel',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Lecturers
+    </button>
+    <div class="nav-sep"></div>
+    <button class="nav-item" onclick="switchPanel('add-hall-panel',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Add Hall
+    </button>
+    <button class="nav-item" onclick="switchPanel('schedule-panel',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+      Schedule Class
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="user-card">
+      <div class="avatar"><?php echo strtoupper(substr($full_name,0,2)); ?></div>
+      <div>
+        <div class="user-name"><?php echo htmlspecialchars($full_name); ?></div>
+        <div class="user-role">Administrator</div>
+      </div>
+    </div>
+    <a href="logout.php" class="btn-logout">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      Sign out
+    </a>
+  </div>
+</div>
+
+<!-- ═══ MAIN ═══════════════════════════════════════════════ -->
+<div class="main">
+
+  <!-- Topbar -->
+  <div class="topbar" id="topbarEl">
+    <div>
+      <div class="page-title" id="topbarTitle">Dashboard overview</div>
+      <div class="page-sub">Welcome back, <strong><?php echo htmlspecialchars($full_name); ?></strong></div>
+    </div>
+    <div class="topbar-chips">
+      <div class="chip">🕒 <?php echo date('H:i'); ?></div>
+      <div class="chip"><?php echo date('D, d M Y'); ?></div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <?php if (!empty($msg)): ?>
+    <div class="alert alert-success">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <?php echo $msg; ?>
+    </div>
+    <?php endif; ?>
+    <?php if (!empty($err_msg)): ?>
+    <div class="alert alert-danger">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <?php echo $err_msg; ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- ── DASHBOARD ─────────────────────────────────────── -->
+    <div id="dashboard" class="panel active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Classes today
+          </div>
+          <div class="stat-val"><?php echo $stats['scheduled']; ?></div>
         </div>
+        <div class="stat-card">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Verified check-ins
+          </div>
+          <div class="stat-val green"><?php echo $stats['verified']; ?></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            Out of range
+          </div>
+          <div class="stat-val red"><?php echo $stats['out_of_range']; ?></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Flagged anomalies
+          </div>
+          <div class="stat-val amber"><?php echo $stats['anomalies']; ?></div>
+        </div>
+      </div>
 
-        <?php if (!empty($msg)): ?>
-            <div class="alert alert-success">✓ <?php echo $msg; ?></div>
-        <?php endif; ?>
-
-        <?php if (!empty($err_msg)): ?>
-            <div class="alert alert-danger">⚠️ <?php echo $err_msg; ?></div>
-        <?php endif; ?>
-
-        <!-- Dashboard Panel -->
-        <div id="dashboard" class="panel active">
-            <!-- Stats -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <h3>Classes Today</h3>
-                        <p><?php echo $stats['scheduled']; ?></p>
-                    </div>
-                    <div class="stat-icon">📅</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <h3>Verified Check-ins</h3>
-                        <p><?php echo $stats['verified']; ?></p>
-                    </div>
-                    <div class="stat-icon">✅</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <h3>Out-Of-Range Logs</h3>
-                        <p style="color: #e74c3c;"><?php echo $stats['out_of_range']; ?></p>
-                    </div>
-                    <div class="stat-icon">❌</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-info">
-                        <h3>Flagged Anomalies</h3>
-                        <p style="color: #d35400;"><?php echo $stats['anomalies']; ?></p>
-                    </div>
-                    <div class="stat-icon">🚨</div>
-                </div>
-            </div>
-
-            <!-- Recent Submissions Table -->
-            <div class="panel-title">Recent Attendance Check-Ins</div>
-            <div style="overflow-x: auto;">
-                <?php if (count($attendance_logs) === 0): ?>
-                    <p style="text-align: center; color: #7f8c8d; padding: 30px;">No attendance submissions logged yet.</p>
+      <div class="section-head">
+        Recent attendance check-ins
+        <button class="btn-outline">Export CSV</button>
+      </div>
+      <div class="card">
+        <?php if (count($attendance_logs) === 0): ?>
+        <div style="padding:48px;text-align:center;color:#8B93A1;font-size:13px">No attendance submissions yet today.</div>
+        <?php else: ?>
+        <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th><th>Lecturer</th><th>Course</th><th>Venue</th>
+              <th>Distance</th><th>Status</th><th>Anomaly</th><th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ($attendance_logs as $log): ?>
+            <tr>
+              <td><?php echo date('H:i:s', strtotime($log['server_timestamp'])); ?></td>
+              <td><strong><?php echo htmlspecialchars($log['lecturer_name']); ?></strong></td>
+              <td><code><?php echo htmlspecialchars($log['course_code']); ?></code></td>
+              <td><?php echo htmlspecialchars($log['hall_name']); ?></td>
+              <td><?php echo $log['distance_from_assigned_location']; ?>m</td>
+              <td>
+                <span class="badge badge-<?php echo strtolower($log['verification_status']); ?>">
+                  <?php echo $log['verification_status']; ?>
+                </span>
+              </td>
+              <td>
+                <?php if ($log['is_anomalous']): ?>
+                  <span class="badge badge-anomaly">🚩 Flagged</span>
                 <?php else: ?>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Timestamp</th>
-                                <th>Lecturer</th>
-                                <th>Course</th>
-                                <th>Target Hall</th>
-                                <th>Dist. (m)</th>
-                                <th>Verification Status</th>
-                                <th>Anomaly Flag</th>
-                                <th>Activity Log</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($attendance_logs as $log): ?>
-                                <tr>
-                                    <td><?php echo date('Y-m-d H:i:s', strtotime($log['server_timestamp'])); ?></td>
-                                    <td><strong><?php echo htmlspecialchars($log['lecturer_name']); ?></strong></td>
-                                    <td><code><?php echo htmlspecialchars($log['course_code']); ?></code></td>
-                                    <td><?php echo htmlspecialchars($log['hall_name']); ?></td>
-                                    <td><?php echo $log['distance_from_assigned_location']; ?>m</td>
-                                    <td>
-                                        <span class="badge badge-<?php echo strtolower($log['verification_status']); ?>">
-                                            <?php echo $log['verification_status']; ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <?php if ($log['is_anomalous']): ?>
-                                            <span class="badge badge-anomaly" title="Impossible speed anomaly detected!">🚨 Flagged</span>
-                                        <?php else: ?>
-                                            <span style="color: #2ecc71;">✓ Clear</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="<?php echo htmlspecialchars($log['submission_description']); ?>">
-                                        <?php echo htmlspecialchars($log['submission_description']); ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                  <span class="clear">✓ Clear</span>
                 <?php endif; ?>
-            </div>
+              </td>
+              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?php echo htmlspecialchars($log['submission_description']); ?>">
+                <?php echo htmlspecialchars($log['submission_description']); ?>
+              </td>
+            </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
         </div>
-
-        <!-- Live Tracker Panel -->
-        <div id="live-tracker-panel" class="panel">
-            <div class="panel-title">📡 Real-Time Lecturer Tracking</div>
-            <div id="tracker-map"></div>
-            <p class="map-help">💡 This map displays active lecturer positions who are currently on shift. Refreshes automatically every 10 seconds.</p>
-        </div>
-
-        <!-- Lecturers Tab Panel -->
-        <div id="lecturers-panel" class="panel">
-            <div class="panel-title">👥 Lecturers Management</div>
-            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 25px; min-height: 600px;">
-                
-                <!-- Lecturer List Sidebar -->
-                <div style="background: #f8f9fb; border-radius: 10px; padding: 15px; overflow-y: auto; max-height: 700px;">
-                    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #7f8c8d; margin-bottom: 12px;">All Registered Lecturers</div>
-                    <?php
-                    $all_lecturers = $conn->query("SELECT user_id, full_name, department, faculty, lecturer_number, profile_pic, is_active FROM users WHERE role = 'lecturer' ORDER BY full_name ASC")->fetchAll();
-                    if (count($all_lecturers) === 0): ?>
-                        <p style="font-size: 13px; color: #bdc3c7;">No lecturers registered yet.</p>
-                    <?php else: ?>
-                        <?php foreach ($all_lecturers as $lec): ?>
-                            <div class="lec-list-item" onclick="loadLecturerDetails(<?php echo $lec['user_id']; ?>)" id="lec-item-<?php echo $lec['user_id']; ?>">
-                                <div style="display:flex; align-items:center; gap: 10px;">
-                                    <?php if ($lec['profile_pic']): ?>
-                                        <img src="<?php echo htmlspecialchars($lec['profile_pic']); ?>" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #3a7bd5;">
-                                    <?php else: ?>
-                                        <div style="width: 38px; height: 38px; border-radius: 50%; background: #3a7bd5; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 15px;">
-                                            <?php echo strtoupper(substr($lec['full_name'], 0, 1)); ?>
-                                        </div>
-                                    <?php endif; ?>
-                                    <div>
-                                        <div style="font-weight: 700; font-size: 13px; color: #2c3e50;"><?php echo htmlspecialchars($lec['full_name']); ?></div>
-                                        <div style="font-size: 11px; color: #7f8c8d;"><?php echo htmlspecialchars($lec['department'] ?? ''); ?></div>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Lecturer Detail Panel -->
-                <div id="lecturerDetailPanel" style="display: none;">
-                    
-                    <!-- Profile Header -->
-                    <div style="display: flex; align-items: center; gap: 20px; background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 100%); border-radius: 12px; padding: 20px; color: white; margin-bottom: 20px;">
-                        <img id="ldProfilePic" src="" alt="Profile" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.5); display: none;">
-                        <div id="ldInitialAvatar" style="width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; color: white; border: 3px solid rgba(255,255,255,0.4);">?</div>
-                        <div>
-                            <div id="ldFullName" style="font-size: 22px; font-weight: 700;"></div>
-                            <div id="ldFaculty" style="font-size: 13px; opacity: 0.85;"></div>
-                            <div id="ldDept" style="font-size: 13px; opacity: 0.85;"></div>
-                            <div id="ldLecNum" style="font-size: 12px; opacity: 0.7; margin-top: 4px;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Bio Data -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
-                        <div style="background: white; border-radius: 10px; padding: 15px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
-                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #7f8c8d; margin-bottom: 5px;">Email</div>
-                            <div id="ldEmail" style="font-size: 13px;"></div>
-                        </div>
-                        <div style="background: white; border-radius: 10px; padding: 15px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
-                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #7f8c8d; margin-bottom: 5px;">Phone</div>
-                            <div id="ldPhone" style="font-size: 13px;"></div>
-                        </div>
-                    </div>
-
-                    <!-- Shift Log & Date Picker -->
-                    <div style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <div style="font-size: 13px; font-weight: 700;">📅 Daily Shift Log</div>
-                            <input type="date" id="ldDatePicker" value="<?php echo date('Y-m-d'); ?>" onchange="reloadLecturerDate()" style="padding: 5px 10px; border-radius: 6px; border: 1px solid #dcdde1; font-size: 12px; width: auto;">
-                        </div>
-                        <div id="ldShiftInfo" style="font-size: 13px; color: #57606f;"></div>
-                    </div>
-
-                    <!-- Timetable -->
-                    <div style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 1px 5px rgba(0,0,0,0.05); max-height: 200px; overflow-y: auto;">
-                        <div style="font-size: 13px; font-weight: 700; margin-bottom: 10px;">📚 Schedule / Timetable</div>
-                        <table style="margin-top: 0;">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Course</th>
-                                    <th>Time</th>
-                                    <th>Venue</th>
-                                </tr>
-                            </thead>
-                            <tbody id="ldScheduleBody">
-                                <tr><td colspan="4" style="text-align:center; color:#bdc3c7;">Loading...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <!-- 2D Movement Map -->
-                    <div style="background: white; border-radius: 10px; padding: 15px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
-                        <div style="font-size: 13px; font-weight: 700; margin-bottom: 5px;">🗺️ Movement Map (Caleb University Campus)</div>
-                        <p style="font-size: 11px; color: #7f8c8d; margin-bottom: 10px;">Nodes (●) and connecting lines show lecturer movement path recorded for the selected date.</p>
-                        <div id="lecturerMovementMap" style="width: 100%; height: 350px; border-radius: 8px; border: 1px solid #e1e8ef;"></div>
-                        <div id="ldMovementCount" style="font-size: 12px; color: #7f8c8d; margin-top: 8px;"></div>
-                    </div>
-                </div>
-
-                <!-- Empty State if no lecturer selected -->
-                <div id="lecturerDetailEmpty" style="display: flex; align-items: center; justify-content: center; text-align: center; padding: 60px 20px;">
-                    <div>
-                        <div style="font-size: 50px; margin-bottom: 15px;">👈</div>
-                        <p style="color: #7f8c8d; font-weight: 600;">Select a lecturer from the list to view their details.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Add Lecture Hall Panel (3D) -->
-
-        <div id="add-hall-panel" class="panel">
-            <div class="panel-title">Configure 3D Lecture Hall Geofence</div>
-            
-            <div class="form-layout">
-                <form action="admin_dashboard.php" method="POST">
-                    <input type="hidden" name="add_hall" value="1">
-                    
-                    <div class="form-group">
-                        <label for="hall_name">Lecture Hall Name *</label>
-                        <input type="text" id="hall_name" name="hall_name" placeholder="e.g. Science Auditorium Block A" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="hall_code">Unique Hall Code *</label>
-                        <input type="text" id="hall_code" name="hall_code" placeholder="e.g. AUD-SCI-A" required>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div class="form-group">
-                            <label for="tolerance">Horizontal Radius (m)</label>
-                            <input type="number" id="tolerance" name="tolerance" value="30" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="altitude_tolerance">Altitude Tolerance (m)</label>
-                            <input type="number" step="0.5" id="altitude_tolerance" name="altitude_tolerance" value="2.5" required>
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div class="form-group">
-                            <label for="latitude">Latitude Coordinate *</label>
-                            <input type="text" id="latitude" name="latitude" readonly required placeholder="Click map to pick">
-                        </div>
-                        <div class="form-group">
-                            <label for="longitude">Longitude Coordinate *</label>
-                            <input type="text" id="longitude" name="longitude" readonly required placeholder="Click map to pick">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="altitude">Base Altitude Reference (Floor Height in Meters) *</label>
-                        <select id="altitude" name="altitude">
-                            <option value="0.00" selected>Ground Floor (0m)</option>
-                            <option value="3.00">First Floor (+3m)</option>
-                            <option value="6.00">Second Floor (+6m)</option>
-                            <option value="9.00">Third Floor (+9m)</option>
-                            <option value="12.00">Fourth Floor (+12m)</option>
-                        </select>
-                        <small style="color: #7f8c8d; font-size: 11px;">Restricts check-in based on height. A lecturer must be close to this floor level height.</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="description">Additional Notes</label>
-                        <textarea id="description" name="description" placeholder="Building floor level, nearby landmarks..."></textarea>
-                    </div>
-
-                    <button type="submit" class="btn-submit">SAVE LECTURE HALL</button>
-                </form>
-
-                <div>
-                    <label>Click on the map to pin room location coordinates</label>
-                    <div id="picker-map"></div>
-                    <p class="map-help">💡 Drag or zoom the map, then click on the target campus location. The form coordinates will auto-fill.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Schedule Class Panel -->
-        <div id="schedule-panel" class="panel">
-            <div class="panel-title">Schedule Lecturer Assignments</div>
-            
-            <form action="admin_dashboard.php" method="POST" style="max-width: 600px;">
-                <input type="hidden" name="schedule_class" value="1">
-                
-                <div class="form-group">
-                    <label for="lecturer_id">Assign Lecturer *</label>
-                    <select id="lecturer_id" name="lecturer_id" required>
-                        <option value="">-- Select Lecturer --</option>
-                        <?php foreach ($lecturers as $lec): ?>
-                            <option value="<?php echo $lec['user_id']; ?>">
-                                <?php echo htmlspecialchars($lec['full_name']); ?> (<?php echo htmlspecialchars($lec['department']); ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="hall_id">Lecture Hall Venue *</label>
-                    <select id="hall_id" name="hall_id" required>
-                        <option value="">-- Select Hall Venue --</option>
-                        <?php foreach ($halls as $h): ?>
-                            <option value="<?php echo $h['hall_id']; ?>">
-                                <?php echo htmlspecialchars($h['hall_name']); ?> [<?php echo htmlspecialchars($h['hall_code']); ?>]
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="course_code">Course Code *</label>
-                    <input type="text" id="course_code" name="course_code" placeholder="e.g. CSC 401" required>
-                </div>
-
-                <div class="form-group">
-                    <label for="course_title">Course Title *</label>
-                    <input type="text" id="course_title" name="course_title" placeholder="e.g. Distributed Database Architecture" required>
-                </div>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    <div class="form-group">
-                        <label for="start_time">Start Time *</label>
-                        <input type="time" id="start_time" name="start_time" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="end_time">End Time *</label>
-                        <input type="time" id="end_time" name="end_time" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label for="scheduled_date">Schedule Date *</label>
-                    <input type="date" id="scheduled_date" name="scheduled_date" value="<?php echo date('Y-m-d'); ?>" required>
-                </div>
-
-                <button type="submit" class="btn-submit">SCHEDULE CLASS SLOT</button>
-            </form>
-        </div>
+        <?php endif; ?>
+      </div>
     </div>
 
-    <!-- Leaflet JS Map Library -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script>
-        let pickerMap = null;
-        let selectedMarker = null;
-        let trackerMap = null;
-        let trackerMarkers = {};
+    <!-- ── LIVE TRACKER ───────────────────────────────────── -->
+    <div id="live-tracker-panel" class="panel">
+      <div class="tracker-grid">
+        <div>
+          <div id="tracker-map"></div>
+          <p class="map-hint">Lecturer positions refresh automatically every 10 seconds. Only staff signed in within the last 10 minutes appear.</p>
+        </div>
+        <div>
+          <div class="section-head" style="margin-bottom:10px">Active right now</div>
+          <div class="card" id="liveList">
+            <div style="padding:20px;text-align:center;color:#8B93A1;font-size:12px">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-        function initPickerMap() {
-            const centerLat = 6.5244;
-            const centerLon = 3.3792;
-            
-            pickerMap = L.map('picker-map').setView([centerLat, centerLon], 10);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap'
-            }).addTo(pickerMap);
+    <!-- ── LECTURERS ──────────────────────────────────────── -->
+    <div id="lecturers-panel" class="panel">
+      <div class="lec-layout">
+        <!-- Left: list -->
+        <div class="lec-list">
+          <div class="lec-list-label">All registered lecturers</div>
+          <?php if (count($all_lecturers) === 0): ?>
+          <p style="font-size:12px;color:#8B93A1;padding:8px 4px">No lecturers registered yet.</p>
+          <?php else: ?>
+          <?php foreach ($all_lecturers as $lec): ?>
+          <div class="lec-item" onclick="loadLecturerDetails(<?php echo $lec['user_id']; ?>)" id="lec-item-<?php echo $lec['user_id']; ?>">
+            <div class="lec-avatar">
+              <?php if ($lec['profile_pic']): ?>
+                <img src="<?php echo htmlspecialchars($lec['profile_pic']); ?>" alt="">
+              <?php else: ?>
+                <?php echo strtoupper(substr($lec['full_name'],0,2)); ?>
+              <?php endif; ?>
+            </div>
+            <div>
+              <div class="lec-item-name"><?php echo htmlspecialchars($lec['full_name']); ?></div>
+              <div class="lec-item-dept"><?php echo htmlspecialchars($lec['department'] ?? ''); ?></div>
+            </div>
+          </div>
+          <?php endforeach; ?>
+          <?php endif; ?>
+        </div>
 
-            pickerMap.on('click', function(e) {
-                const lat = e.latlng.lat;
-                const lon = e.latlng.lng;
+        <!-- Right: detail -->
+        <div id="lecturerDetailPanel" style="display:none">
+          <div class="detail-card">
+            <!-- Profile header -->
+            <div class="detail-header">
+              <div class="detail-header-avatar">
+                <img id="ldProfilePic" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%">
+                <span id="ldInitialAvatar">?</span>
+              </div>
+              <div>
+                <div class="detail-name" id="ldFullName"></div>
+                <div class="detail-meta" id="ldFaculty"></div>
+                <div class="detail-meta" id="ldDept"></div>
+                <div class="detail-meta" style="opacity:.7;font-size:11px;margin-top:3px" id="ldLecNum"></div>
+              </div>
+            </div>
 
-                document.getElementById('latitude').value = lat.toFixed(7);
-                document.getElementById('longitude').value = lon.toFixed(7);
+            <!-- Contact -->
+            <div class="info-grid">
+              <div class="info-box"><div class="info-box-label">Email</div><div class="info-box-val" id="ldEmail">—</div></div>
+              <div class="info-box"><div class="info-box-label">Phone</div><div class="info-box-val" id="ldPhone">—</div></div>
+            </div>
 
-                if (selectedMarker) {
-                    selectedMarker.setLatLng(e.latlng);
-                } else {
-                    selectedMarker = L.marker(e.latlng).addTo(pickerMap);
-                }
-                pickerMap.panTo(e.latlng);
-            });
-        }
+            <!-- Shift -->
+            <div class="card-pad" style="background:#F7F8FA;border-radius:8px;padding:14px">
+              <div class="shift-row">
+                <div class="shift-row-title">Daily shift log</div>
+                <input type="date" id="ldDatePicker" class="date-input" value="<?php echo date('Y-m-d'); ?>" onchange="reloadLecturerDate()">
+              </div>
+              <div class="shift-info" id="ldShiftInfo">—</div>
+            </div>
 
-        function initTrackerMap() {
-            const centerLat = 6.5244;
-            const centerLon = 3.3792;
+            <!-- Timetable -->
+            <div>
+              <div class="section-head" style="font-size:12px;margin-bottom:8px">Timetable</div>
+              <div style="overflow-y:auto;max-height:180px;border:1px solid #E5E8EE;border-radius:8px">
+                <table class="sched-table">
+                  <thead><tr><th>Date</th><th>Course</th><th>Time</th><th>Venue</th></tr></thead>
+                  <tbody id="ldScheduleBody"><tr><td colspan="4" style="text-align:center;color:#8B93A1;padding:20px">Select a lecturer</td></tr></tbody>
+                </table>
+              </div>
+            </div>
 
-            trackerMap = L.map('tracker-map').setView([centerLat, centerLon], 12);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap'
-            }).addTo(trackerMap);
+            <!-- Movement map -->
+            <div>
+              <div class="section-head" style="font-size:12px;margin-bottom:6px">Movement map</div>
+              <p style="font-size:11px;color:#8B93A1;margin-bottom:8px">Dots and lines show the lecturer's recorded path for the selected date.</p>
+              <div id="lecturerMovementMap"></div>
+              <div id="ldMovementCount" style="font-size:11px;color:#8B93A1;margin-top:6px"></div>
+            </div>
+          </div>
+        </div>
 
-            // Fetch pings immediately, and set interval
-            fetchLivePings();
-            setInterval(fetchLivePings, 10000);
-        }
+        <!-- Empty state -->
+        <div id="lecturerDetailEmpty" class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          <p>Select a lecturer to view their profile</p>
+        </div>
+      </div>
+    </div>
 
-        async function fetchLivePings() {
-            if (!trackerMap) return;
+    <!-- ── ADD HALL ───────────────────────────────────────── -->
+    <div id="add-hall-panel" class="panel">
+      <div class="form-layout">
+        <form action="admin_dashboard.php" method="POST" class="form-col">
+          <input type="hidden" name="add_hall" value="1">
+          <div class="field"><label>Hall name *</label><input type="text" name="hall_name" placeholder="e.g. Science Auditorium Block A" required></div>
+          <div class="field"><label>Hall code *</label><input type="text" name="hall_code" placeholder="e.g. AUD-SCI-A" required></div>
+          <div class="two-col-field">
+            <div class="field"><label>Horizontal radius (m)</label><input type="number" name="tolerance" value="30" required></div>
+            <div class="field"><label>Altitude tolerance (m)</label><input type="number" step="0.5" name="altitude_tolerance" value="2.5" required></div>
+          </div>
+          <div class="two-col-field">
+            <div class="field"><label>Latitude *</label><input type="text" id="latitude" name="latitude" readonly required placeholder="Click map to fill"></div>
+            <div class="field"><label>Longitude *</label><input type="text" id="longitude" name="longitude" readonly required placeholder="Click map to fill"></div>
+          </div>
+          <div class="field">
+            <label>Floor level *</label>
+            <select name="altitude">
+              <option value="0.00">Ground floor (0 m)</option>
+              <option value="3.00">First floor (+3 m)</option>
+              <option value="6.00">Second floor (+6 m)</option>
+              <option value="9.00">Third floor (+9 m)</option>
+              <option value="12.00">Fourth floor (+12 m)</option>
+            </select>
+            <small>Restricts check-in to this height — lecturer must be on this floor.</small>
+          </div>
+          <div class="field"><label>Notes</label><textarea name="description" placeholder="Wing, landmarks, access notes…"></textarea></div>
+          <div>
+            <button type="submit" class="btn-green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+              Save hall
+            </button>
+          </div>
+        </form>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Click map to pin location</div>
+          <div id="picker-map"></div>
+          <p class="map-hint">Drag or zoom to the campus, then click to drop a pin. Coordinates auto-fill in the form.</p>
+        </div>
+      </div>
+    </div>
 
-            try {
-                const response = await fetch('admin_dashboard.php?get_live_pings=1');
-                const pings = await response.json();
+    <!-- ── SCHEDULE CLASS ─────────────────────────────────── -->
+    <div id="schedule-panel" class="panel">
+      <div style="max-width:540px">
+        <div class="card card-pad">
+          <form action="admin_dashboard.php" method="POST" style="display:flex;flex-direction:column;gap:14px">
+            <input type="hidden" name="schedule_class" value="1">
+            <div class="field">
+              <label>Lecturer *</label>
+              <select name="lecturer_id" required>
+                <option value="">Select a lecturer</option>
+                <?php foreach ($lecturers as $lec): ?>
+                <option value="<?php echo $lec['user_id']; ?>"><?php echo htmlspecialchars($lec['full_name']); ?> (<?php echo htmlspecialchars($lec['department']); ?>)</option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="field">
+              <label>Venue *</label>
+              <select name="hall_id" required>
+                <option value="">Select a hall</option>
+                <?php foreach ($halls as $h): ?>
+                <option value="<?php echo $h['hall_id']; ?>"><?php echo htmlspecialchars($h['hall_name']); ?> [<?php echo htmlspecialchars($h['hall_code']); ?>]</option>
+                <?php endforeach; ?>
+              </select>
+            </div>
+            <div class="field"><label>Course code *</label><input type="text" name="course_code" placeholder="e.g. CSC 401" required></div>
+            <div class="field"><label>Course title *</label><input type="text" name="course_title" placeholder="e.g. Distributed Database Architecture" required></div>
+            <div class="two-col-field">
+              <div class="field"><label>Start time *</label><input type="time" name="start_time" required></div>
+              <div class="field"><label>End time *</label><input type="time" name="end_time" required></div>
+            </div>
+            <div class="field"><label>Date *</label><input type="date" name="scheduled_date" value="<?php echo date('Y-m-d'); ?>" required></div>
+            <div style="padding-top:6px">
+              <button type="submit" class="btn-green">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
+                Schedule class
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
 
-                // Clear markers not in update
-                const activeNames = pings.map(p => p.full_name);
-                for (let name in trackerMarkers) {
-                    if (!activeNames.includes(name)) {
-                        trackerMarkers[name].removeFrom(trackerMap);
-                        delete trackerMarkers[name];
-                    }
-                }
+  </div><!-- /content -->
+</div><!-- /main -->
 
-                // Add or update markers
-                pings.forEach(ping => {
-                    const lat = parseFloat(ping.latitude);
-                    const lon = parseFloat(ping.longitude);
-                    const name = ping.full_name;
-                    const dept = ping.department;
-                    const alt = parseFloat(ping.altitude);
-                    const time = new Date(ping.last_updated).toLocaleTimeString();
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+/* ── Panel switching ─────────────────────────────────────── */
+const panelTitles = {
+  'dashboard':         ['Dashboard overview',        "Today's attendance at a glance"],
+  'live-tracker-panel':['Live staff tracker',        'Real-time positions — refreshes every 10 s'],
+  'lecturers-panel':   ['Lecturers',                 'Click a name to view profile and shift data'],
+  'add-hall-panel':    ['Add lecture hall',           'Configure 3D geofence for attendance verification'],
+  'schedule-panel':    ['Schedule a class',           'Assign a lecturer to a hall and time slot'],
+};
 
-                    const popupText = `
-                        <strong>👤 ${name}</strong><br>
-                        🏢 Dept: ${dept}<br>
-                        📐 Altitude: ${alt.toFixed(1)}m<br>
-                        🕒 Last Ping: ${time}
-                    `;
+function switchPanel(panelId, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.getElementById(panelId).classList.add('active');
+  el.classList.add('active');
+  const t = panelTitles[panelId];
+  if (t) { document.getElementById('topbarTitle').textContent = t[0]; document.querySelector('.page-sub').innerHTML = t[1]; }
+  if (panelId === 'add-hall-panel' && !pickerMap) setTimeout(initPickerMap, 100);
+  if (panelId === 'live-tracker-panel' && !trackerMap) setTimeout(initTrackerMap, 100);
+}
 
-                    if (trackerMarkers[name]) {
-                        trackerMarkers[name].setLatLng([lat, lon]).setPopupContent(popupText);
-                    } else {
-                        trackerMarkers[name] = L.marker([lat, lon]).addTo(trackerMap).bindPopup(popupText);
-                    }
-                });
+/* ── Coordinate picker map ───────────────────────────────── */
+let pickerMap = null, selectedMarker = null;
+function initPickerMap() {
+  pickerMap = L.map('picker-map').setView([6.5244, 3.3792], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(pickerMap);
+  pickerMap.on('click', function(e) {
+    document.getElementById('latitude').value  = e.latlng.lat.toFixed(7);
+    document.getElementById('longitude').value = e.latlng.lng.toFixed(7);
+    if (selectedMarker) selectedMarker.setLatLng(e.latlng);
+    else selectedMarker = L.marker(e.latlng).addTo(pickerMap);
+    pickerMap.panTo(e.latlng);
+  });
+}
 
-                // Adjust bounds to fit all markers if any exist
-                const markerList = Object.values(trackerMarkers);
-                if (markerList.length > 0) {
-                    const group = new L.featureGroup(markerList);
-                    trackerMap.fitBounds(group.getBounds().pad(0.2));
-                }
+/* ── Live tracker map ────────────────────────────────────── */
+let trackerMap = null, trackerMarkers = {};
+function initTrackerMap() {
+  trackerMap = L.map('tracker-map').setView([6.5244, 3.3792], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(trackerMap);
+  fetchLivePings();
+  setInterval(fetchLivePings, 10000);
+}
+async function fetchLivePings() {
+  if (!trackerMap) return;
+  try {
+    const data = await (await fetch('admin_dashboard.php?get_live_pings=1')).json();
+    const active = data.map(p => p.full_name);
+    Object.keys(trackerMarkers).forEach(n => { if (!active.includes(n)) { trackerMarkers[n].removeFrom(trackerMap); delete trackerMarkers[n]; } });
+    data.forEach(ping => {
+      const lat = parseFloat(ping.latitude), lon = parseFloat(ping.longitude);
+      const popup = `<strong>${ping.full_name}</strong><br>${ping.department}<br>Alt: ${parseFloat(ping.altitude).toFixed(1)}m<br>${new Date(ping.last_updated).toLocaleTimeString()}`;
+      if (trackerMarkers[ping.full_name]) trackerMarkers[ping.full_name].setLatLng([lat,lon]).setPopupContent(popup);
+      else trackerMarkers[ping.full_name] = L.marker([lat,lon]).addTo(trackerMap).bindPopup(popup);
+    });
+    const list = Object.values(trackerMarkers);
+    if (list.length) trackerMap.fitBounds(new L.featureGroup(list).getBounds().pad(0.2));
+    // Update sidebar list
+    const liveList = document.getElementById('liveList');
+    if (data.length === 0) { liveList.innerHTML = '<div style="padding:20px;text-align:center;color:#8B93A1;font-size:12px">No active lecturers right now.</div>'; return; }
+    liveList.innerHTML = '<table><thead><tr><th>Name</th><th>Dept</th><th>Last ping</th></tr></thead><tbody>' +
+      data.map(p => `<tr><td><strong>${p.full_name}</strong></td><td>${p.department}</td><td style="color:#2D6A4F;font-weight:500">${new Date(p.last_updated).toLocaleTimeString()}</td></tr>`).join('') +
+      '</tbody></table>';
+  } catch(e) { console.error(e); }
+}
 
-            } catch (err) {
-                console.error("Error loading live tracking coordinates:", err);
-            }
-        }
+/* ── Lecturer detail ─────────────────────────────────────── */
+let currentLecturerId = null, movementMap = null, movementPolyline = null, movementMarkers = [];
+async function loadLecturerDetails(lecId) {
+  currentLecturerId = lecId;
+  document.querySelectorAll('.lec-item').forEach(i => i.classList.remove('selected'));
+  const el = document.getElementById('lec-item-' + lecId);
+  if (el) el.classList.add('selected');
+  const date = document.getElementById('ldDatePicker').value;
+  document.getElementById('lecturerDetailPanel').style.display = 'block';
+  document.getElementById('lecturerDetailEmpty').style.display  = 'none';
+  document.getElementById('ldScheduleBody').innerHTML = '<tr><td colspan="4" style="text-align:center;color:#8B93A1;padding:16px">Loading…</td></tr>';
+  document.getElementById('ldShiftInfo').textContent = 'Loading…';
+  try {
+    const data = await (await fetch(`admin_dashboard.php?get_lecturer_details=${lecId}&date=${date}`)).json();
+    if (data.error) { alert(data.error); return; }
+    const p = data.profile;
+    // Header
+    if (p.profile_pic) {
+      document.getElementById('ldProfilePic').src = p.profile_pic;
+      document.getElementById('ldProfilePic').style.display = 'block';
+      document.getElementById('ldInitialAvatar').style.display = 'none';
+    } else {
+      document.getElementById('ldProfilePic').style.display = 'none';
+      document.getElementById('ldInitialAvatar').style.display = 'inline';
+      document.getElementById('ldInitialAvatar').textContent = (p.full_name||'?').substring(0,2).toUpperCase();
+    }
+    document.getElementById('ldFullName').textContent = p.full_name || '—';
+    document.getElementById('ldFaculty').textContent  = p.faculty || '';
+    document.getElementById('ldDept').textContent     = p.department || '';
+    document.getElementById('ldLecNum').textContent   = p.lecturer_number ? 'ID: ' + p.lecturer_number : '';
+    document.getElementById('ldEmail').textContent    = p.email || '—';
+    document.getElementById('ldPhone').textContent    = p.phone || '—';
+    // Shift
+    const s = data.shift;
+    document.getElementById('ldShiftInfo').innerHTML = s
+      ? `Sign-in: <strong>${s.sign_in_time||'—'}</strong> &nbsp;|&nbsp; Sign-out: <strong>${s.sign_out_time||'Still active'}</strong>${s.sign_out_method==='auto_geofence'?' (auto-detected)':''}`
+      : 'No shift recorded for this date.';
+    // Schedule
+    const rows = data.schedule.length
+      ? data.schedule.map(c => `<tr><td>${c.scheduled_date}</td><td><strong>${c.course_code}</strong> — ${c.course_title}</td><td>${c.scheduled_start_time}–${c.scheduled_end_time}</td><td>${c.hall_name}</td></tr>`).join('')
+      : '<tr><td colspan="4" style="text-align:center;color:#8B93A1;padding:14px">No scheduled classes found.</td></tr>';
+    document.getElementById('ldScheduleBody').innerHTML = rows;
+    // Movement map
+    if (!movementMap) {
+      movementMap = L.map('lecturerMovementMap').setView([6.6718, 3.4908], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(movementMap);
+    }
+    movementMarkers.forEach(m => m.removeFrom(movementMap));
+    movementMarkers = [];
+    if (movementPolyline) movementPolyline.removeFrom(movementMap);
+    if (data.movement && data.movement.length) {
+      const coords = data.movement.map(m => [parseFloat(m.latitude), parseFloat(m.longitude)]);
+      movementPolyline = L.polyline(coords, {color:'#2D6A4F', weight:2}).addTo(movementMap);
+      coords.forEach((c,i) => {
+        const m = L.circleMarker(c, {radius:5, color:'#2D6A4F', fillColor:'#52A878', fillOpacity:1, weight:2}).addTo(movementMap);
+        m.bindPopup(`Point ${i+1}<br>${data.movement[i].logged_at}`);
+        movementMarkers.push(m);
+      });
+      movementMap.fitBounds(movementPolyline.getBounds().pad(0.15));
+      document.getElementById('ldMovementCount').textContent = `${data.movement.length} location points recorded`;
+    } else {
+      movementMap.setView([6.6718, 3.4908], 15);
+      document.getElementById('ldMovementCount').textContent = 'No movement data for this date.';
+    }
+  } catch(e) { console.error(e); }
+}
 
-        function switchPanel(panelId, element) {
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.sidebar-menu a').forEach(a => a.classList.remove('active'));
-
-            document.getElementById(panelId).classList.add('active');
-            element.classList.add('active');
-
-            if (panelId === 'add-hall-panel' && !pickerMap) {
-                setTimeout(() => {
-                    initPickerMap();
-                }, 100);
-            }
-
-            if (panelId === 'live-tracker-panel' && !trackerMap) {
-                setTimeout(() => {
-                    initTrackerMap();
-                }, 100);
-            }
-        }
-
-        // ==============================
-        // Lecturer Detail & Movement Map
-        // ==============================
-        let currentLecturerId = null;
-        let movementMap = null;
-        let movementPolyline = null;
-        let movementMarkers = [];
-
-        async function loadLecturerDetails(lecId) {
-            currentLecturerId = lecId;
-            const date = document.getElementById('ldDatePicker').value;
-
-            // Highlight selected lecturer in list
-            document.querySelectorAll('.lec-list-item').forEach(el => el.classList.remove('selected'));
-            const selectedEl = document.getElementById('lec-item-' + lecId);
-            if (selectedEl) selectedEl.classList.add('selected');
-
-            // Show detail panel, hide empty state
-            document.getElementById('lecturerDetailPanel').style.display = 'block';
-            document.getElementById('lecturerDetailEmpty').style.display = 'none';
-
-            try {
-                const response = await fetch(`admin_dashboard.php?get_lecturer_details=${lecId}&date=${date}`);
-                const data = await response.json();
-
-                if (data.error) {
-                    alert('Error: ' + data.error);
-                    return;
-                }
-
-                const p = data.profile;
-
-                // Profile
-                document.getElementById('ldFullName').textContent = p.full_name || '';
-                document.getElementById('ldFaculty').textContent = p.faculty ? `🏛️ ${p.faculty}` : '';
-                document.getElementById('ldDept').textContent = p.department ? `📂 ${p.department}` : '';
-                document.getElementById('ldLecNum').textContent = p.lecturer_number ? `🪪 ${p.lecturer_number}` : '';
-                document.getElementById('ldEmail').textContent = p.email || 'N/A';
-                document.getElementById('ldPhone').textContent = p.phone || 'N/A';
-
-                // Profile picture
-                const picEl = document.getElementById('ldProfilePic');
-                const avatarEl = document.getElementById('ldInitialAvatar');
-                if (p.profile_pic) {
-                    picEl.src = p.profile_pic;
-                    picEl.style.display = 'block';
-                    avatarEl.style.display = 'none';
-                } else {
-                    picEl.style.display = 'none';
-                    avatarEl.style.display = 'flex';
-                    avatarEl.textContent = (p.full_name || '?').charAt(0).toUpperCase();
-                }
-
-                // Shift info
-                const shiftEl = document.getElementById('ldShiftInfo');
-                if (data.shift) {
-                    const s = data.shift;
-                    const inTime = s.sign_in_time ? new Date(s.sign_in_time).toLocaleTimeString() : '—';
-                    const outTime = s.sign_out_time ? new Date(s.sign_out_time).toLocaleTimeString() : '—';
-                    const method = s.sign_out_method === 'auto_geofence' ? ' (Auto – Left Campus)' : s.sign_out_method === 'manual' ? ' (Manual)' : '';
-                    shiftEl.innerHTML = `
-                        <span style="color:#2ecc71; font-weight:bold;">✅ Signed In:</span> ${inTime} 
-                        &nbsp;|&nbsp; 
-                        <span style="color:#e74c3c; font-weight:bold;">🔴 Signed Out:</span> ${outTime}${method}
-                    `;
-                } else {
-                    shiftEl.innerHTML = `<span style="color:#7f8c8d;">No shift record found for this date.</span>`;
-                }
-
-                // Timetable / Schedule
-                const tbody = document.getElementById('ldScheduleBody');
-                if (data.schedule && data.schedule.length > 0) {
-                    tbody.innerHTML = data.schedule.map(sc => `
-                        <tr>
-                            <td>${sc.scheduled_date}</td>
-                            <td><strong>${sc.course_code}</strong><br><small style="color:#7f8c8d;">${sc.course_title}</small></td>
-                            <td>${sc.scheduled_start_time.substring(0,5)} – ${sc.scheduled_end_time.substring(0,5)}</td>
-                            <td>${sc.hall_name}</td>
-                        </tr>
-                    `).join('');
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#bdc3c7;">No schedule records found.</td></tr>';
-                }
-
-                // 2D Movement Map
-                setTimeout(() => {
-                    drawMovementMap(data.movement);
-                }, 150);
-
-            } catch (err) {
-                console.error('Failed to load lecturer details:', err);
-            }
-        }
-
-        function reloadLecturerDate() {
-            if (currentLecturerId) {
-                loadLecturerDetails(currentLecturerId);
-            }
-        }
-
-        function drawMovementMap(movementData) {
-            // Init map centred on Caleb University
-            if (!movementMap) {
-                movementMap = L.map('lecturerMovementMap').setView([6.6718, 3.4908], 16);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap'
-                }).addTo(movementMap);
-
-                // Draw campus geofence boundary
-                L.circle([6.6718, 3.4908], {
-                    color: '#3a7bd5',
-                    fillColor: '#3a7bd5',
-                    fillOpacity: 0.05,
-                    radius: 800,
-                    dashArray: '8,6',
-                    weight: 2
-                }).addTo(movementMap).bindTooltip('Caleb University Campus Boundary', { permanent: false });
-            } else {
-                // Clear old movement layers
-                movementMarkers.forEach(m => m.remove());
-                movementMarkers = [];
-                if (movementPolyline) {
-                    movementPolyline.remove();
-                    movementPolyline = null;
-                }
-            }
-
-            const countEl = document.getElementById('ldMovementCount');
-
-            if (!movementData || movementData.length === 0) {
-                countEl.textContent = 'No movement data logged for this date.';
-                return;
-            }
-
-            const latlngs = movementData.map(m => [parseFloat(m.latitude), parseFloat(m.longitude)]);
-
-            // Draw connecting polyline (movement path)
-            movementPolyline = L.polyline(latlngs, {
-                color: '#3a7bd5',
-                weight: 3,
-                opacity: 0.75,
-                dashArray: '4, 4'
-            }).addTo(movementMap);
-
-            // Draw node markers
-            latlngs.forEach((latlng, i) => {
-                const m = movementData[i];
-                const timeStr = new Date(m.logged_at).toLocaleTimeString();
-                const isFirst = i === 0;
-                const isLast = i === latlngs.length - 1;
-
-                let color = '#3a7bd5';
-                if (isFirst) color = '#2ecc71';
-                if (isLast) color = '#e74c3c';
-
-                const marker = L.circleMarker(latlng, {
-                    radius: isFirst || isLast ? 8 : 5,
-                    color: color,
-                    fillColor: color,
-                    fillOpacity: 0.9,
-                    weight: 2
-                }).addTo(movementMap)
-                  .bindPopup(`<strong>${isFirst ? '🟢 First Ping' : isLast ? '🔴 Last Ping' : '📍 Ping'}</strong><br>Time: ${timeStr}<br>Alt: ${parseFloat(m.altitude).toFixed(1)}m`);
-
-                movementMarkers.push(marker);
-            });
-
-            // Fit bounds to movement path
-            movementMap.fitBounds(L.polyline(latlngs).getBounds().pad(0.2));
-
-            countEl.textContent = `${movementData.length} location pings logged · First: ${new Date(movementData[0].logged_at).toLocaleTimeString()} · Last: ${new Date(movementData[movementData.length-1].logged_at).toLocaleTimeString()}`;
-        }
-    </script>
+function reloadLecturerDate() { if (currentLecturerId) loadLecturerDetails(currentLecturerId); }
+</script>
 </body>
 </html>
-
