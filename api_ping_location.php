@@ -65,12 +65,15 @@ try {
             
             if ($active_shift) {
                 // Auto sign out
+                $sign_out_time = ($current_time >= '16:00:00')
+                    ? date('Y-m-d 16:00:00')
+                    : date('Y-m-d H:i:s');
                 $stmt_out = $conn->prepare("
                     UPDATE lecturer_shifts 
-                    SET sign_out_time = NOW(), sign_out_latitude = ?, sign_out_longitude = ?, sign_out_altitude = ?, sign_out_method = 'auto_geofence'
+                    SET sign_out_time = ?, sign_out_latitude = ?, sign_out_longitude = ?, sign_out_altitude = ?, sign_out_method = 'auto_geofence'
                     WHERE shift_id = ?
                 ");
-                $stmt_out->execute([$latitude, $longitude, $altitude, $active_shift['shift_id']]);
+                $stmt_out->execute([$sign_out_time, $latitude, $longitude, $altitude, $active_shift['shift_id']]);
             }
         }
     }

@@ -336,4 +336,49 @@ function sendJsonResponse($data, $http_code = 200) {
 function sanitizeInput($input) {
     return htmlspecialchars(stripslashes(trim($input)), ENT_QUOTES, 'UTF-8');
 }
+
+/**
+ * Detect the password column used by the users table.
+ * Supports older installs that used `password` and newer installs that use `password_hash`.
+ */
+function getUserPasswordColumn() {
+    static $column = null;
+    global $conn;
+
+    if ($column !== null) {
+        return $column;
+    }
+
+    try {
+        $stmt = $conn->prepare("
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'users'
+              AND column_name IN ('password_hash', 'password')
+            ORDER BY CASE WHEN column_name = 'password_hash' THEN 1 ELSE 2 END
+            LIMIT 1
+        ");
+        $stmt->execute();
+        $column = $stmt->fetchColumn() ?: 'password_hash';
+    } catch (PDOException $e) {
+        $column = 'password_hash';
+    }
+
+    return $column;
+}
+
+/**
+ * Fetch a user's stored password digest from whichever password column exists.
+ */
+function getStoredUserPassword($userRow) {
+    if (isset($userRow['password_hash']) && !empty($userRow['password_hash'])) {
+        return $userRow['password_hash'];
+    }
+
+    if (isset($userRow['password']) && !empty($userRow['password'])) {
+        return $userRow['password'];
+    }
+
+    return null;
+}
 ?>

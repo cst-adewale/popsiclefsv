@@ -66,14 +66,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($stmt->fetch()) {
                             $error_message = 'Email is already registered.';
                         } else {
-                            // Hash password using SHA-256 to match the seed data and config
+                            // Hash password using SHA-256 for backward compatibility with seed data
                             $hashed_password = hash('sha256', $password);
-                            
-                            // Insert new lecturer
-                            $stmt = $conn->prepare("
-                                INSERT INTO users (username, password, email, full_name, phone, role, faculty, department, lecturer_number, profile_pic, is_active)
-                                VALUES (?, ?, ?, ?, ?, 'lecturer', ?, ?, ?, ?, TRUE)
-                            ");
+                            $password_column = getUserPasswordColumn();
+
+                            // Insert new lecturer using whichever password column exists in the database
+                            if ($password_column === 'password_hash') {
+                                $stmt = $conn->prepare("
+                                    INSERT INTO users (username, password_hash, email, full_name, phone, role, faculty, department, lecturer_number, profile_pic, is_active)
+                                    VALUES (?, ?, ?, ?, ?, 'lecturer', ?, ?, ?, ?, TRUE)
+                                ");
+                            } else {
+                                $stmt = $conn->prepare("
+                                    INSERT INTO users (username, password, email, full_name, phone, role, faculty, department, lecturer_number, profile_pic, is_active)
+                                    VALUES (?, ?, ?, ?, ?, 'lecturer', ?, ?, ?, ?, TRUE)
+                                ");
+                            }
                             $stmt->execute([$username, $hashed_password, $email, $full_name, $phone, $faculty, $department, $lecturer_number, $profile_pic]);
                             
                             // Get the newly created user ID

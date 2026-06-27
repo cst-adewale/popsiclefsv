@@ -12,27 +12,38 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email    = sanitizeInput($_POST['email'] ?? '');
+    $identifier = sanitizeInput($_POST['identifier'] ?? ($_POST['email'] ?? $_POST['username'] ?? ''));
     $password = $_POST['password'] ?? '';
-    if (!empty($email) && !empty($password)) {
+    if (!empty($identifier) && !empty($password)) {
         try {
-            $stmt = $conn->prepare("SELECT user_id, full_name, role, password_hash, is_active FROM users WHERE email = ?");
-            $stmt->execute([$email]);
+            $stmt = $conn->prepare("
+                SELECT user_id, full_name, role, email, username, password_hash, password, is_active
+                FROM users
+                WHERE email = ? OR username = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$identifier, $identifier]);
             $user = $stmt->fetch();
-            if ($user && $user['is_active'] && password_verify($password, $user['password_hash'])) {
+            $stored_password = $user ? getStoredUserPassword($user) : null;
+            $password_is_valid = false;
+            if ($stored_password !== null) {
+                $password_is_valid = password_verify($password, $stored_password) || hash('sha256', $password) === $stored_password;
+            }
+
+            if ($user && $user['is_active'] && $password_is_valid) {
                 $_SESSION['user_id']   = $user['user_id'];
                 $_SESSION['full_name'] = $user['full_name'];
                 $_SESSION['role']      = $user['role'];
                 header('Location: ' . ($user['role'] === 'admin' ? 'admin_dashboard.php' : 'lecturer_app.php'));
                 exit;
             } else {
-                $error = 'Invalid email or password.';
+                $error = 'Invalid username/email or password.';
             }
         } catch (PDOException $e) {
             $error = 'A system error occurred. Please try again.';
         }
     } else {
-        $error = 'Please enter your email and password.';
+        $error = 'Please enter your username/email and password.';
     }
 }
 ?>
@@ -41,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign in — Popsicle FSV</title>
+<title>Sign in — FSV Caleb</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -98,8 +109,8 @@ body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:
 
     <form method="POST" action="login.php">
       <div class="field">
-        <label>Email address</label>
-        <input type="email" name="email" placeholder="you@caleb.edu.ng" value="<?php echo htmlspecialchars($_POST['email'] ?? ''); ?>" required autofocus>
+        <label>Username or email</label>
+        <input type="text" name="identifier" placeholder="jdoe or you@caleb.edu.ng" value="<?php echo htmlspecialchars($_POST['identifier'] ?? ($_POST['email'] ?? $_POST['username'] ?? '')); ?>" required autofocus>
       </div>
       <div class="field">
         <label>Password</label>

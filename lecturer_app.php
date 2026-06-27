@@ -696,7 +696,7 @@ $week_classes = $stmt_week->fetchAll();
                 </div>
                 <div class="shift-btn-container">
                     <button class="btn-shift btn-shift-in" id="shiftInBtn" onclick="handleShiftAction('signin')" 
-                        <?php echo ($today_shift || date('H:i:s') < '08:00:00') ? 'disabled' : ''; ?>>
+                        <?php echo ($today_shift) ? 'disabled' : ''; ?>>
                         Sign In
                     </button>
                     <button class="btn-shift btn-shift-out" id="shiftOutBtn" onclick="handleShiftAction('signout')"
@@ -782,6 +782,9 @@ $week_classes = $stmt_week->fetchAll();
                                             <span style="font-size: 11px; color: #7f8c8d;"><?php echo htmlspecialchars($class['hall_name']); ?></span>
                                         </div>
                                         <div class="timetable-actions">
+                                            <?php if (date('Y-m-d') === $class['scheduled_date'] && $class['status'] !== 'completed'): ?>
+                                            <button class="btn-small btn-edit" onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">Attend</button>
+                                            <?php endif; ?>
                                             <button class="btn-small btn-edit" onclick="openEditScheduleModal(<?php echo htmlspecialchars(json_encode($class)); ?>)">Edit</button>
                                             <button class="btn-small btn-delete" onclick="deleteScheduleSlot(<?php echo $class['class_id']; ?>)">Del</button>
                                         </div>
@@ -963,6 +966,26 @@ $week_classes = $stmt_week->fetchAll();
                 weekBtn.className = 'btn btn-gps';
                 todayBtn.style.marginBottom = '0';
                 weekBtn.style.marginTop = '0';
+            }
+        }
+
+        function syncShiftButtons() {
+            const shiftInBtn = document.getElementById('shiftInBtn');
+            const shiftOutBtn = document.getElementById('shiftOutBtn');
+            if (!shiftInBtn || !shiftOutBtn) return;
+
+            const now = new Date();
+            const hour = now.getHours();
+            const minute = now.getMinutes();
+            const afterStart = hour > 8 || (hour === 8 && minute >= 0);
+            const beforeEnd = hour < 16;
+
+            if (!shiftInBtn.disabled) {
+                shiftInBtn.disabled = !afterStart || !beforeEnd;
+            }
+
+            if (shiftOutBtn.disabled && <?php echo isset($today_shift) && $today_shift && $today_shift['sign_out_time'] === null ? 'true' : 'false'; ?>) {
+                shiftOutBtn.disabled = false;
             }
         }
 
@@ -1366,6 +1389,9 @@ $week_classes = $stmt_week->fetchAll();
                 alert('Request failed: ' + err.message);
             }
         });
+
+        syncShiftButtons();
+        setInterval(syncShiftButtons, 30000);
     </script>
 </body>
 </html>

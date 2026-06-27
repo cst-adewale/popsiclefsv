@@ -35,6 +35,10 @@ if ($action === 'signin') {
         echo json_encode(['status' => 'ERROR', 'message' => 'Sign-in is not active until 8:00 AM.']);
         exit;
     }
+    if ($current_time >= '16:00:00') {
+        echo json_encode(['status' => 'ERROR', 'message' => 'Sign-in is closed after 4:00 PM.']);
+        exit;
+    }
 
     try {
         // Check if already signed in today
@@ -75,7 +79,7 @@ if ($action === 'signin') {
         }
 
         // Clamp signout time: if past 4pm, log exactly 4pm
-        if ($current_time > '16:00:00') {
+        if ($current_time >= '16:00:00') {
             // Set sign out time to 4:00 PM of today
             $four_pm_today = date('Y-m-d 16:00:00');
             $stmt = $conn->prepare("
