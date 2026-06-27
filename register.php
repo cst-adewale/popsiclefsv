@@ -83,6 +83,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 ");
                             }
                             $stmt->execute([$username, $hashed_password, $email, $full_name, $phone, $faculty, $department, $lecturer_number, $profile_pic]);
+
+                            if ($stmt->rowCount() < 1) {
+                                throw new PDOException('Registration did not create a database row.');
+                            }
                             
                             // Get the newly created user ID
                             $new_user_id = $conn->lastInsertId();

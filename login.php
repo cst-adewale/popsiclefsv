@@ -17,7 +17,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!empty($identifier) && !empty($password)) {
         try {
             $stmt = $conn->prepare("
-                SELECT user_id, full_name, role, email, username, password_hash, password, is_active
+                SELECT user_id, full_name, role, email, username, password_hash, is_active
                 FROM users
                 WHERE email = ? OR username = ?
                 LIMIT 1
