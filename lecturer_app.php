@@ -696,6 +696,7 @@ $week_classes = $stmt_week->fetchAll();
                     <button id="tabTodayBtn" class="btn btn-gps" style="flex: 1; padding: 8px; font-size: 12px; margin-bottom: 0;" onclick="switchScheduleTab('today')">Today's List</button>
                     <button id="tabWeekBtn" class="btn btn-cancel" style="flex: 1; padding: 8px; font-size: 12px; margin-top: 0;" onclick="switchScheduleTab('week')">Weekly Timetable</button>
                 </div>
+                <button class="btn-create-slot" style="margin-bottom:12px;" onclick="openCreateScheduleModal()">+ Create New Schedule Slot</button>
 
                 <!-- Today Schedule Tab -->
                 <div id="todayScheduleTab">
@@ -1302,6 +1303,7 @@ $week_classes = $stmt_week->fetchAll();
                 document.getElementById('loaderOverlay').style.display = 'none';
                 alert('Network request failed: ' + err.message);
             }
+        });
         // Schedule modal management functions
         function openCreateScheduleModal() {
             document.getElementById('modalTitle').textContent = "Add Schedule Slot";
