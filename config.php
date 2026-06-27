@@ -12,13 +12,13 @@
 // ============================================================
 
 // Pooler host (Supabase Dashboard → Project Settings → Database → Connection Pooling)
-define('DB_HOST', getenv('DB_HOST') ?: 'db.qikyorppbzokktianreo.supabase.co');
+define('DB_HOST', getenv('DB_HOST') ?: 'aws-0-eu-west-1.pooler.supabase.com');
 
 // Pooler uses port 6543 (Transaction mode) — NOT 5432
-define('DB_PORT', getenv('DB_PORT') ?: '5432');
+define('DB_PORT', getenv('DB_PORT') ?: '6543');
 
 // Pooler username format: postgres.[project-ref]
-define('DB_USER', getenv('DB_USER') ?: 'postgres');
+define('DB_USER', getenv('DB_USER') ?: 'postgres.qikyorppbzokktianreo');
 
 define('DB_PASS', getenv('DB_PASS') ?: 'YOUR_SUPABASE_DATABASE_PASSWORD');
 define('DB_NAME', getenv('DB_NAME') ?: 'postgres');
