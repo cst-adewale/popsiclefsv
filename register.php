@@ -117,35 +117,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lecturer Registration - Attendance System</title>
+    <title>Register - Caleb FSV</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: 'Outfit', sans-serif;
         }
 
         body {
-            background: linear-gradient(135deg, #3a7bd5 0%, #3a6073 100%);
+            background: #f7f8fa;
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 16px;
+            color: #1a1a2e;
         }
 
         .register-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
+            background: #fff;
+            border: 1px solid #e5e8ee;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px rgba(26, 26, 46, 0.04);
             width: 100%;
-            max-width: 480px;
-            padding: 30px 25px;
+            max-width: 420px;
+            padding: 24px 20px;
             text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            animation: fadeIn 0.6s ease-out;
+            animation: fadeIn 0.4s ease-out;
         }
 
         @keyframes fadeIn {
@@ -154,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .logo-area {
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
 
         .logo-icon {
@@ -165,13 +168,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         .logo-area h1 {
             font-size: 22px;
-            color: #2c3e50;
+            color: #1a1a2e;
             font-weight: 700;
             letter-spacing: -0.5px;
         }
 
         .logo-area p {
-            color: #7f8c8d;
+            color: #8b93a1;
             font-size: 13px;
             margin-top: 5px;
         }
@@ -179,8 +182,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 15px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         @media (max-width: 480px) {
@@ -191,7 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .form-group {
-            margin-bottom: 12px;
+            margin-bottom: 10px;
             text-align: left;
         }
 
@@ -219,17 +222,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             width: 100%;
             padding: 10px 14px;
             border: 1px solid #dcdde1;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 14px;
-            transition: all 0.3s;
-            background-color: #f8f9fa;
+            transition: all 0.2s;
+            background-color: #f8f9fb;
         }
 
         input:focus, select:focus {
             outline: none;
-            border-color: #3a7bd5;
+            border-color: #52a878;
             background-color: #fff;
-            box-shadow: 0 0 0 4px rgba(58, 123, 213, 0.15);
+            box-shadow: 0 0 0 4px rgba(82, 168, 120, 0.12);
         }
 
         .error-message {
@@ -237,7 +240,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-left: 4px solid #d63031;
             color: #2d3436;
             padding: 12px;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 13px;
             text-align: left;
             margin-bottom: 20px;
@@ -260,20 +263,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             width: 100%;
             padding: 12px;
             border: none;
-            border-radius: 8px;
-            background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 100%);
+            border-radius: 10px;
+            background: #214f3b;
             color: white;
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 15px rgba(58, 123, 213, 0.3);
-            margin-top: 10px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 15px rgba(33, 79, 59, 0.18);
+            margin-top: 6px;
         }
 
         .btn-register:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(58, 123, 213, 0.4);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(33, 79, 59, 0.22);
         }
 
         .btn-register:active {
@@ -283,11 +286,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .login-link {
             margin-top: 20px;
             font-size: 13px;
-            color: #7f8c8d;
+            color: #8b93a1;
         }
 
         .login-link a {
-            color: #3a7bd5;
+            color: #214f3b;
             text-decoration: none;
             font-weight: 600;
         }

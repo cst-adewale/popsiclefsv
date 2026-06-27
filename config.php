@@ -12,13 +12,13 @@
 // ============================================================
 
 // Pooler host (Supabase Dashboard → Project Settings → Database → Connection Pooling)
-define('DB_HOST', getenv('DB_HOST') ?: 'aws-0-eu-west-1.pooler.supabase.com');
+define('DB_HOST', getenv('DB_HOST') ?: 'db.qikyorppbzokktianreo.supabase.co');
 
 // Pooler uses port 6543 (Transaction mode) — NOT 5432
-define('DB_PORT', getenv('DB_PORT') ?: '6543');
+define('DB_PORT', getenv('DB_PORT') ?: '5432');
 
 // Pooler username format: postgres.[project-ref]
-define('DB_USER', getenv('DB_USER') ?: 'postgres.qikyorppbzokktianreo');
+define('DB_USER', getenv('DB_USER') ?: 'postgres');
 
 define('DB_PASS', getenv('DB_PASS') ?: 'YOUR_SUPABASE_DATABASE_PASSWORD');
 define('DB_NAME', getenv('DB_NAME') ?: 'postgres');
@@ -37,11 +37,32 @@ define('CAMPUS_RADIUS_METERS', 800);
 // Set timezone in PHP
 date_default_timezone_set(TIMEZONE);
 
-// Create connection using PDO (PostgreSQL via Supabase Pooler)
+// Create connection using PDO (Supabase PostgreSQL)
 try {
-    // sslmode=require is mandatory for Supabase
-    $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";sslmode=require";
-    $conn = new PDO($dsn, DB_USER, DB_PASS, [
+    $dbUrl = getenv('DATABASE_URL') ?: '';
+
+    if (!empty($dbUrl)) {
+        $parts = parse_url($dbUrl);
+        if ($parts === false || empty($parts['host'])) {
+            throw new PDOException('Invalid DATABASE_URL format.');
+        }
+
+        $dsn = sprintf(
+            'pgsql:host=%s;port=%s;dbname=%s;sslmode=require',
+            $parts['host'],
+            $parts['port'] ?? DB_PORT,
+            ltrim($parts['path'] ?? '/postgres', '/')
+        );
+        $dbUser = rawurldecode($parts['user'] ?? DB_USER);
+        $dbPass = rawurldecode($parts['pass'] ?? DB_PASS);
+    } else {
+        // sslmode=require is mandatory for Supabase
+        $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";sslmode=require";
+        $dbUser = DB_USER;
+        $dbPass = DB_PASS;
+    }
+
+    $conn = new PDO($dsn, $dbUser, $dbPass, [
         PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
     ]);

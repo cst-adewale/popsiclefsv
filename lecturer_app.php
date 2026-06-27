@@ -61,7 +61,10 @@ $week_classes = $stmt_week->fetchAll();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Attendance App — Lecturer Portal</title>
+    <title>Caleb FSV — Lecturer Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 
     <!-- ======= PWA MANIFEST ======= -->
     <link rel="manifest" href="/manifest.json">
@@ -104,7 +107,7 @@ $week_classes = $stmt_week->fetchAll();
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Outfit', sans-serif;
         }
 
         body {

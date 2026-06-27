@@ -108,21 +108,21 @@ $all_lecturers = $conn->query("SELECT user_id,full_name,department,faculty,lectu
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard — Popsicle FSV</title>
+<title>Admin Dashboard — Caleb FSV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
 <style>
 /* ── Reset & Base ─────────────────────────────────────── */
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#F7F8FA;display:flex;min-height:100vh;color:#1A1A2E;font-size:14px}
+body{font-family:'Outfit',sans-serif;background:#F7F8FA;display:flex;min-height:100vh;color:#1A1A2E;font-size:14px}
 
 /* ── Sidebar ──────────────────────────────────────────── */
-.sidebar{width:230px;background:#FFFFFF;border-right:1px solid #E5E8EE;display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100}
-.logo-wrap{padding:22px 18px 18px;border-bottom:1px solid #F0F2F5}
+.sidebar{width:220px;background:#FFFFFF;border-right:1px solid #E5E8EE;display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100}
+.logo-wrap{padding:18px 16px 16px;border-bottom:1px solid #F0F2F5}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-icon{width:34px;height:34px;background:#2D6A4F;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.logo-icon{width:34px;height:34px;background:#214F3B;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .logo-icon svg{width:18px;height:18px}
 .logo-name{font-size:14px;font-weight:700;color:#1A1A2E;line-height:1.2}
 .logo-sub{font-size:10px;color:#8B93A1}
@@ -143,13 +143,13 @@ nav{flex:1;padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow
 .btn-logout svg{width:13px;height:13px}
 
 /* ── Main ─────────────────────────────────────────────── */
-.main{margin-left:230px;flex:1;display:flex;flex-direction:column;min-height:100vh}
-.topbar{background:#FFFFFF;border-bottom:1px solid #E5E8EE;padding:15px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh}
+.topbar{background:#FFFFFF;border-bottom:1px solid #E5E8EE;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .page-title{font-size:16px;font-weight:700;color:#1A1A2E}
 .page-sub{font-size:12px;color:#8B93A1;margin-top:1px}
 .topbar-chips{display:flex;gap:8px;align-items:center}
 .chip{background:#F7F8FA;border:1px solid #E5E8EE;border-radius:20px;padding:5px 12px;font-size:11px;color:#4B5263;font-weight:500}
-.content{padding:24px 28px;flex:1}
+.content{padding:20px 22px;flex:1}
 .panel{display:none;animation:fadeIn .2s ease}
 .panel.active{display:block}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
@@ -200,16 +200,16 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
 .form-col{display:flex;flex-direction:column;gap:14px}
 .field{display:flex;flex-direction:column;gap:5px}
 .field label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px}
-.field input,.field select,.field textarea{padding:9px 12px;border:1px solid #E5E8EE;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:border-color .15s}
+.field input,.field select,.field textarea{padding:9px 12px;border:1px solid #E5E8EE;border-radius:10px;font-size:13px;font-family:'Outfit',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:border-color .15s}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:#52A878}
 .field input[readonly]{background:#F7F8FA;color:#4B5263;cursor:default}
 .field textarea{resize:none;height:80px}
 .field small{font-size:10px;color:#8B93A1;margin-top:2px}
 .two-col-field{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.btn-green{padding:10px 20px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:inline-flex;align-items:center;gap:7px;transition:background .15s}
+.btn-green{padding:10px 18px;background:#214F3B;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;display:inline-flex;align-items:center;gap:7px;transition:background .15s}
 .btn-green:hover{background:#3B7A57}
 .btn-green svg{width:14px;height:14px}
-.btn-outline{padding:7px 14px;background:#FFFFFF;border:1px solid #E5E8EE;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;color:#4B5263;font-family:'Inter',sans-serif;transition:background .15s}
+.btn-outline{padding:7px 14px;background:#FFFFFF;border:1px solid #E5E8EE;border-radius:10px;font-size:12px;font-weight:500;cursor:pointer;color:#4B5263;font-family:'Outfit',sans-serif;transition:background .15s}
 .btn-outline:hover{background:#F7F8FA}
 
 /* ── Map ──────────────────────────────────────────────── */
@@ -240,7 +240,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
 .info-box-val{font-size:13px;color:#1A1A2E;font-weight:500}
 .shift-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .shift-row-title{font-size:12px;font-weight:700;color:#1A1A2E}
-.date-input{padding:5px 10px;border:1px solid #E5E8EE;border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;color:#1A1A2E;outline:none}
+.date-input{padding:5px 10px;border:1px solid #E5E8EE;border-radius:8px;font-size:12px;font-family:'Outfit',sans-serif;color:#1A1A2E;outline:none}
 .date-input:focus{border-color:#52A878}
 .shift-info{font-size:12px;color:#4B5263;line-height:1.6}
 .sched-table{width:100%;border-collapse:collapse;font-size:12px}
@@ -267,7 +267,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
       </div>
       <div>
-        <div class="logo-name">Popsicle FSV</div>
+        <div class="logo-name">Caleb FSV</div>
         <div class="logo-sub">Admin Portal</div>
       </div>
     </div>

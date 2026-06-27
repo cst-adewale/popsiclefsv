@@ -52,28 +52,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign in — FSV Caleb</title>
+<title>Sign in — Caleb FSV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#1A1A2E}
-.login-wrap{width:100%;max-width:400px;padding:20px}
+body{font-family:'Outfit',sans-serif;background:#F7F8FA;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#1A1A2E}
+.login-wrap{width:100%;max-width:380px;padding:16px}
 .logo-row{display:flex;align-items:center;gap:10px;margin-bottom:36px;justify-content:center}
 .logo-icon{width:36px;height:36px;background:#2D6A4F;border-radius:9px;display:flex;align-items:center;justify-content:center}
 .logo-icon svg{width:20px;height:20px}
-.logo-name{font-size:17px;font-weight:700;color:#1A1A2E}
+.logo-name{font-size:18px;font-weight:700;color:#1A1A2E}
 .logo-sub{font-size:11px;color:#8B93A1;font-weight:400}
 .card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:14px;padding:32px 28px}
 .card-title{font-size:20px;font-weight:700;color:#1A1A2E;margin-bottom:4px}
 .card-sub{font-size:13px;color:#8B93A1;margin-bottom:28px}
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .field label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.4px}
-.field input{padding:10px 13px;border:1px solid #E5E8EE;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:border-color .15s}
+.field input{padding:10px 12px;border:1px solid #E5E8EE;border-radius:10px;font-size:14px;font-family:'Outfit',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:border-color .15s}
 .field input:focus{border-color:#52A878}
 .field input::placeholder{color:#B0B8C8}
-.btn-submit{width:100%;padding:12px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s;margin-top:8px}
+.btn-submit{width:100%;padding:11px;background:#214F3B;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;transition:background .15s;margin-top:4px}
 .btn-submit:hover{background:#3B7A57}
 .error-box{background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:11px 14px;font-size:13px;color:#DC2626;margin-bottom:18px;display:flex;align-items:center;gap:8px}
 .error-box svg{flex-shrink:0;width:15px;height:15px}
@@ -81,7 +81,7 @@ body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:
 .register-link{text-align:center;font-size:13px;color:#8B93A1}
 .register-link a{color:#2D6A4F;font-weight:600;text-decoration:none}
 .register-link a:hover{text-decoration:underline}
-.footer-note{text-align:center;font-size:11px;color:#B0B8C8;margin-top:24px}
+.footer-note{text-align:center;font-size:11px;color:#B0B8C8;margin-top:18px}
 </style>
 </head>
 <body>
@@ -91,14 +91,14 @@ body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:
       <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
     </div>
     <div>
-      <div class="logo-name">Popsicle FSV</div>
+      <div class="logo-name">Caleb FSV</div>
       <div class="logo-sub">Caleb University · Field Verification</div>
     </div>
   </div>
 
   <div class="card">
     <div class="card-title">Sign in</div>
-    <div class="card-sub">Enter your staff credentials to continue</div>
+    <div class="card-sub">Use your staff username or email</div>
 
     <?php if ($error): ?>
     <div class="error-box">
@@ -125,7 +125,7 @@ body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:
     </div>
   </div>
 
-  <div class="footer-note">Caleb University Attendance Verification System · 2026</div>
+  <div class="footer-note">Caleb FSV · 2026</div>
 </div>
 </body>
 </html>
