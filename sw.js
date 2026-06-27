@@ -3,7 +3,7 @@
  * sw.js - Service Worker for PWA offline support and caching
  */
 
-const CACHE_NAME = 'attendance-pwa-v2';
+const CACHE_NAME = 'caleb-fsv-pwa-v1';
 
 // Core assets to cache for offline access
 const PRECACHE_ASSETS = [
@@ -53,7 +53,7 @@ self.addEventListener('fetch', (event) => {
 
     // API calls (ping, submit) must always go to the network — never cache
     const url = new URL(event.request.url);
-    const skipCachePatterns = ['api_submit_attendance', 'api_ping_location', 'logout'];
+    const skipCachePatterns = ['api_submit_attendance', 'api_ping_location', 'logout', 'api_lecturer_shift', 'api_manage_schedule'];
     if (skipCachePatterns.some((p) => url.pathname.includes(p))) {
         return; // Let browser handle it normally
     }

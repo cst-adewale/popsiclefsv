@@ -60,7 +60,7 @@ $week_classes = $stmt_week->fetchAll();
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>Caleb FSV — Lecturer Portal</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -76,7 +76,7 @@ $week_classes = $stmt_week->fetchAll();
     <!-- ======= iOS / APPLE PWA SUPPORT ======= -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="AttendanceApp">
+    <meta name="apple-mobile-web-app-title" content="Caleb FSV">
     <link rel="apple-touch-icon" href="/icons/icon-512.png">
     <!-- iOS Splash Screens (optional but recommended for best experience) -->
     <link rel="apple-touch-startup-image" href="/icons/icon-512.png">
@@ -111,42 +111,23 @@ $week_classes = $stmt_week->fetchAll();
         }
 
         body {
-            background-color: #f5f6fa;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            background: #f7f8fa;
             min-height: 100vh;
             color: #2f3640;
         }
 
-        /* Mobile Container Frame to simulate a phone */
-        .mobile-frame {
-            background-color: #ffffff;
-            width: 100%;
-            max-width: 450px;
-            height: 100vh;
+        /* App Header */
+        .app-shell {
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            position: relative;
-            overflow: hidden;
+            background: #f7f8fa;
         }
 
-        @media (min-width: 450px) {
-            .mobile-frame {
-                height: 870px;
-                border-radius: 30px;
-                border: 8px solid #2f3640;
-            }
-        }
-
-        /* App Header */
         .app-header {
-            background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 100%);
-            padding: 20px 15px;
+            background: linear-gradient(135deg, #214f3b 0%, #3a7bd5 100%);
+            padding: 18px 16px;
             color: white;
-            border-bottom-left-radius: 20px;
-            border-bottom-right-radius: 20px;
             box-shadow: 0 4px 15px rgba(58, 123, 213, 0.25);
             flex-shrink: 0;
         }
@@ -187,9 +168,9 @@ $week_classes = $stmt_week->fetchAll();
 
         /* Content Area */
         .app-content {
-            flex-grow: 1;
+            flex: 1;
             overflow-y: auto;
-            padding: 15px;
+            padding: 14px;
             background-color: #f8f9fb;
         }
 
@@ -649,7 +630,7 @@ $week_classes = $stmt_week->fetchAll();
     </style>
 </head>
 <body>
-    <div class="mobile-frame">
+    <div class="app-shell">
         <!-- Loader Screen -->
         <div class="loader-overlay" id="loaderOverlay">
             <div class="spinner"></div>

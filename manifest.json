@@ -1,13 +1,14 @@
 {
-    "name": "School Attendance Verification",
-    "short_name": "AttendanceApp",
-    "description": "Lecturer check-in and attendance verification system using GPS and 3D geofencing.",
+    "name": "Caleb FSV",
+    "short_name": "Caleb FSV",
+    "description": "Caleb University lecturer verification system using GPS, schedules, and geofencing.",
     "start_url": "/lecturer_app.php",
     "scope": "/",
     "display": "standalone",
+    "display_override": ["window-controls-overlay", "standalone"],
     "orientation": "portrait",
-    "background_color": "#1e272e",
-    "theme_color": "#3a7bd5",
+    "background_color": "#f7f8fa",
+    "theme_color": "#214f3b",
     "lang": "en",
     "icons": [
         {
