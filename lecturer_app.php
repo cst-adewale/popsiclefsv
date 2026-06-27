@@ -27,6 +27,34 @@ $stmt = $conn->prepare("
 ");
 $stmt->execute([$lecturer_id]);
 $scheduled_classes = $stmt->fetchAll();
+
+// Fetch today's shift status
+$stmt_shift = $conn->prepare("
+    SELECT sign_in_time, sign_out_time, sign_out_method 
+    FROM lecturer_shifts 
+    WHERE lecturer_id = ? AND work_date = CURRENT_DATE
+");
+$stmt_shift->execute([$lecturer_id]);
+$today_shift = $stmt_shift->fetch();
+
+// Fetch all lecture halls
+$stmt_halls = $conn->query("SELECT hall_id, hall_name, hall_code FROM lecture_halls ORDER BY hall_name ASC");
+$all_halls = $stmt_halls->fetchAll();
+
+// Fetch weekly schedule Monday to Friday (current week starting Monday)
+$stmt_week = $conn->prepare("
+    SELECT sc.class_id, sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, sc.scheduled_date,
+           lh.hall_id, lh.hall_name, sc.status
+    FROM scheduled_classes sc
+    JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
+    WHERE sc.lecturer_id = ?
+      AND sc.scheduled_date >= DATE_TRUNC('week', CURRENT_DATE)
+      AND sc.scheduled_date < DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '7 days'
+      AND EXTRACT(ISODOW FROM sc.scheduled_date) BETWEEN 1 AND 5
+    ORDER BY sc.scheduled_date ASC, sc.scheduled_start_time ASC
+");
+$stmt_week->execute([$lecturer_id]);
+$week_classes = $stmt_week->fetchAll();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -427,6 +455,173 @@ $scheduled_classes = $stmt->fetchAll();
             margin-bottom: 3px;
         }
 
+        /* Shift Card & Timetable Styles */
+        .shift-card {
+            background: white;
+            border-radius: 14px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+            border: 1px solid #e1e8ef;
+        }
+        .shift-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+            color: #2c3e50;
+            border-bottom: 1px solid #f1f2f6;
+            padding-bottom: 8px;
+            margin-bottom: 10px;
+        }
+        .shift-btn-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .btn-shift {
+            padding: 10px;
+            font-size: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+            border: none;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn-shift-in {
+            background: #2ecc71;
+            color: white;
+        }
+        .btn-shift-out {
+            background: #e74c3c;
+            color: white;
+        }
+        .btn-shift:disabled {
+            background: #cbd5e0;
+            color: #718096;
+            cursor: not-allowed;
+        }
+        .timetable-container {
+            background: white;
+            border-radius: 14px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+        }
+        .timetable-day-header {
+            font-weight: 700;
+            color: #2c3e50;
+            background: #f1f2f6;
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin-top: 15px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .timetable-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #f1f2f6;
+            font-size: 13px;
+        }
+        .timetable-item:last-child {
+            border-bottom: none;
+        }
+        .timetable-time {
+            font-weight: bold;
+            color: #3a7bd5;
+            min-width: 90px;
+        }
+        .timetable-details {
+            flex-grow: 1;
+            padding-left: 10px;
+        }
+        .timetable-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 10px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+        }
+        .btn-edit { background: #3498db; }
+        .btn-delete { background: #e74c3c; }
+        .btn-create-slot {
+            background: #3a7bd5;
+            color: white;
+            padding: 8px 12px;
+            font-size: 12px;
+            font-weight: bold;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            margin-top: 10px;
+            display: block;
+            width: 100%;
+            text-align: center;
+            text-decoration: none;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: white;
+            width: 90%;
+            max-width: 400px;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s ease-out;
+        }
+        .modal-header {
+            font-weight: bold;
+            font-size: 16px;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .modal-close {
+            cursor: pointer;
+            font-size: 20px;
+            color: #7f8c8d;
+        }
+        .modal select, .modal input {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #e1e8ef;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+
         /* Height/Altitude Simulator Panel style */
         .simulator-badge {
             background-color: #e0f7fa;
@@ -476,40 +671,128 @@ $scheduled_classes = $stmt->fetchAll();
         <!-- Main Scrollable Content -->
         <div class="app-content" id="appContent">
             
+            <!-- Daily Shift Tracking Card -->
+            <div class="shift-card">
+                <div class="shift-header">
+                    <span>🕒 Daily Shift Status</span>
+                    <?php if (!$today_shift): ?>
+                        <span class="shift-status-inactive">🔴 NOT SIGNED IN</span>
+                    <?php elseif ($today_shift['sign_out_time'] === null): ?>
+                        <span class="shift-status-active">🟢 SIGNED IN</span>
+                    <?php else: ?>
+                        <span style="color: #7f8c8d; font-weight: bold;">⚫ SIGNED OUT (<?php echo date('H:i', strtotime($today_shift['sign_out_time'])); ?>)</span>
+                    <?php endif; ?>
+                </div>
+                <div style="font-size: 12px; color: #57606f; line-height: 1.4;">
+                    <?php if (!$today_shift): ?>
+                        Tracking runs 8am - 4pm. Sign in to start scanning.
+                    <?php elseif ($today_shift['sign_out_time'] === null): ?>
+                        Signed in at: <strong><?php echo date('H:i', strtotime($today_shift['sign_in_time'])); ?></strong><br>
+                        Location tracking is active. Leaving the campus geofence will automatically sign you out.
+                    <?php else: ?>
+                        Signed out at: <strong><?php echo date('H:i', strtotime($today_shift['sign_out_time'])); ?></strong> 
+                        (<?php echo $today_shift['sign_out_method'] === 'auto_geofence' ? 'Auto-detected off-campus' : 'Manual'; ?>)
+                    <?php endif; ?>
+                </div>
+                <div class="shift-btn-container">
+                    <button class="btn-shift btn-shift-in" id="shiftInBtn" onclick="handleShiftAction('signin')" 
+                        <?php echo ($today_shift || date('H:i:s') < '08:00:00') ? 'disabled' : ''; ?>>
+                        Sign In
+                    </button>
+                    <button class="btn-shift btn-shift-out" id="shiftOutBtn" onclick="handleShiftAction('signout')"
+                        <?php echo (!$today_shift || $today_shift['sign_out_time'] !== null) ? 'disabled' : ''; ?>>
+                        Sign Out
+                    </button>
+                </div>
+            </div>
+
             <!-- Dynamic Classes View -->
             <div id="scheduleSection">
-                <div class="section-title">Today's Class Schedule</div>
-                
-                <?php if (count($scheduled_classes) === 0): ?>
-                    <div style="text-align: center; padding: 40px 20px; background: white; border-radius: 12px; margin-top: 10px;">
-                        <span style="font-size: 40px;">☕</span>
-                        <p style="font-weight: 600; margin-top: 10px; color: #7f8c8d;">No lectures scheduled today</p>
-                        <p style="font-size: 12px; color: #bdc3c7; margin-top: 5px;">Enjoy your free hours!</p>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($scheduled_classes as $class): ?>
-                        <div class="class-card <?php echo $class['status'] === 'completed' ? 'completed' : ''; ?>" 
-                             onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">
-                            <div class="card-header">
-                                <span class="course-code"><?php echo htmlspecialchars($class['course_code']); ?></span>
-                                <span class="status-badge badge-<?php echo $class['status']; ?>">
-                                    <?php echo htmlspecialchars($class['status']); ?>
-                                </span>
-                            </div>
-                            <div class="course-title"><?php echo htmlspecialchars($class['course_title']); ?></div>
-                            <div class="card-meta">
-                                <div class="meta-item">
-                                    <span>🕒</span>
-                                    <span><?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?></span>
-                                </div>
-                                <div class="meta-item">
-                                    <span>📍</span>
-                                    <span><?php echo htmlspecialchars($class['hall_name']); ?></span>
-                                </div>
-                            </div>
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button id="tabTodayBtn" class="btn btn-gps" style="flex: 1; padding: 8px; font-size: 12px; margin-bottom: 0;" onclick="switchScheduleTab('today')">Today's List</button>
+                    <button id="tabWeekBtn" class="btn btn-cancel" style="flex: 1; padding: 8px; font-size: 12px; margin-top: 0;" onclick="switchScheduleTab('week')">Weekly Timetable</button>
+                </div>
+
+                <!-- Today Schedule Tab -->
+                <div id="todayScheduleTab">
+                    <div class="section-title">Today's Class Schedule</div>
+                    <?php if (count($scheduled_classes) === 0): ?>
+                        <div style="text-align: center; padding: 40px 20px; background: white; border-radius: 12px; margin-top: 10px;">
+                            <span style="font-size: 40px;">☕</span>
+                            <p style="font-weight: 600; margin-top: 10px; color: #7f8c8d;">No lectures scheduled today</p>
+                            <p style="font-size: 12px; color: #bdc3c7; margin-top: 5px;">Enjoy your free hours!</p>
                         </div>
+                    <?php else: ?>
+                        <?php foreach ($scheduled_classes as $class): ?>
+                            <div class="class-card <?php echo $class['status'] === 'completed' ? 'completed' : ''; ?>" 
+                                 onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">
+                                <div class="card-header">
+                                    <span class="course-code"><?php echo htmlspecialchars($class['course_code']); ?></span>
+                                    <span class="status-badge badge-<?php echo $class['status']; ?>">
+                                        <?php echo htmlspecialchars($class['status']); ?>
+                                    </span>
+                                </div>
+                                <div class="course-title"><?php echo htmlspecialchars($class['course_title']); ?></div>
+                                <div class="card-meta">
+                                    <div class="meta-item">
+                                        <span>🕒</span>
+                                        <span><?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?></span>
+                                    </div>
+                                    <div class="meta-item">
+                                        <span>📍</span>
+                                        <span><?php echo htmlspecialchars($class['hall_name']); ?></span>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Weekly Timetable Tab -->
+                <div id="weekScheduleTab" style="display: none;">
+                    <div class="section-title">Weekly Monday - Friday Timetable</div>
+                    
+                    <?php
+                    $days_map = [
+                        1 => 'Monday',
+                        2 => 'Tuesday',
+                        3 => 'Wednesday',
+                        4 => 'Thursday',
+                        5 => 'Friday'
+                    ];
+                    
+                    foreach ($days_map as $day_num => $day_name):
+                        // Filter classes for this day
+                        $day_classes = array_filter($week_classes, function($c) use ($day_num) {
+                            return date('N', strtotime($c['scheduled_date'])) == $day_num;
+                        });
+                    ?>
+                        <div class="timetable-day-header"><?php echo $day_name; ?></div>
+                        <?php if (empty($day_classes)): ?>
+                            <div style="padding: 10px; font-size: 12px; color: #bdc3c7; background: white; border-radius: 8px; margin-top: 5px;">No classes scheduled</div>
+                        <?php else: ?>
+                            <div style="background: white; border-radius: 8px; overflow: hidden; margin-top: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <?php foreach ($day_classes as $class): ?>
+                                    <div class="timetable-item">
+                                        <div class="timetable-time">
+                                            <?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?>
+                                        </div>
+                                        <div class="timetable-details">
+                                            <strong><?php echo htmlspecialchars($class['course_code']); ?></strong><br>
+                                            <span style="font-size: 11px; color: #7f8c8d;"><?php echo htmlspecialchars($class['hall_name']); ?></span>
+                                        </div>
+                                        <div class="timetable-actions">
+                                            <button class="btn-small btn-edit" onclick="openEditScheduleModal(<?php echo htmlspecialchars(json_encode($class)); ?>)">Edit</button>
+                                            <button class="btn-small btn-delete" onclick="deleteScheduleSlot(<?php echo $class['class_id']; ?>)">Del</button>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
                     <?php endforeach; ?>
-                <?php endif; ?>
+                    
+                    <button class="btn-create-slot" onclick="openCreateScheduleModal()">+ Add New Class Slot</button>
+                </div>
             </div>
 
             <!-- Verification / Form View -->
@@ -595,6 +878,50 @@ $scheduled_classes = $stmt->fetchAll();
         </div>
     </div>
 
+    <!-- Schedule Manage Modal -->
+    <div id="scheduleModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span id="modalTitle">Add Schedule Slot</span>
+                <span class="modal-close" onclick="closeScheduleModal()">&times;</span>
+            </div>
+            <form id="scheduleForm">
+                <input type="hidden" id="sched_action" name="action" value="create">
+                <input type="hidden" id="sched_class_id" name="class_id">
+                
+                <label for="sched_course_code">Course Code</label>
+                <input type="text" id="sched_course_code" name="course_code" placeholder="e.g. CSC 401" required>
+
+                <label for="sched_course_title">Course Title</label>
+                <input type="text" id="sched_course_title" name="course_title" placeholder="e.g. Compiler Construction" required>
+
+                <label for="sched_hall_id">Lecture Hall</label>
+                <select id="sched_hall_id" name="hall_id" required>
+                    <option value="" disabled selected>-- Select Hall --</option>
+                    <?php foreach ($all_halls as $hall): ?>
+                        <option value="<?php echo $hall['hall_id']; ?>"><?php echo htmlspecialchars($hall['hall_name'] . ' (' . $hall['hall_code'] . ')'); ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <label for="sched_date">Schedule Date</label>
+                <input type="date" id="sched_date" name="scheduled_date" required>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <label for="sched_start_time">Start Time</label>
+                        <input type="time" id="sched_start_time" name="start_time" required>
+                    </div>
+                    <div>
+                        <label for="sched_end_time">End Time</label>
+                        <input type="time" id="sched_end_time" name="end_time" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-gps" style="margin-top: 15px; margin-bottom: 0;">Save Schedule</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Leaflet JS Map Library -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
@@ -607,10 +934,90 @@ $scheduled_classes = $stmt->fetchAll();
         let rawAltitude = 0.00;
         let rawAccuracy = 15;
 
+        let isShiftActive = <?php echo ($today_shift && $today_shift['sign_out_time'] === null) ? 'true' : 'false'; ?>;
+
         // Background tracking pinger initialization
         window.addEventListener('load', () => {
-            startLiveLocationPinger();
+            if (isShiftActive) {
+                startLiveLocationPinger();
+            }
         });
+
+        function switchScheduleTab(tabName) {
+            const todayTab = document.getElementById('todayScheduleTab');
+            const weekTab = document.getElementById('weekScheduleTab');
+            const todayBtn = document.getElementById('tabTodayBtn');
+            const weekBtn = document.getElementById('tabWeekBtn');
+
+            if (tabName === 'today') {
+                todayTab.style.display = 'block';
+                weekTab.style.display = 'none';
+                todayBtn.className = 'btn btn-gps';
+                weekBtn.className = 'btn btn-cancel';
+                todayBtn.style.marginBottom = '0';
+                weekBtn.style.marginTop = '0';
+            } else {
+                todayTab.style.display = 'none';
+                weekTab.style.display = 'block';
+                todayBtn.className = 'btn btn-cancel';
+                weekBtn.className = 'btn btn-gps';
+                todayBtn.style.marginBottom = '0';
+                weekBtn.style.marginTop = '0';
+            }
+        }
+
+        async function handleShiftAction(action) {
+            if (action === 'signin') {
+                const now = new Date();
+                if (now.getHours() < 8) {
+                    alert("Sign-in is not active until 8:00 AM.");
+                    return;
+                }
+            }
+            
+            document.getElementById('loaderOverlay').style.display = 'flex';
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const altOffset = parseFloat(document.getElementById('altOffset').value) || 0;
+                    const alt = (position.coords.altitude !== null) ? (position.coords.altitude + altOffset) : (0.00 + altOffset);
+                    
+                    await submitShift(action, lat, lon, alt);
+                }, async (err) => {
+                    // Fallback to Caleb University coordinates for demo/testing if GPS fails
+                    await submitShift(action, 6.6718, 3.4908, 0.00);
+                }, { enableHighAccuracy: true, timeout: 5000 });
+            } else {
+                await submitShift(action, 6.6718, 3.4908, 0.00);
+            }
+        }
+
+        async function submitShift(action, lat, lon, alt) {
+            const formData = new FormData();
+            formData.append('action', action);
+            formData.append('latitude', lat);
+            formData.append('longitude', lon);
+            formData.append('altitude', alt);
+
+            try {
+                const response = await fetch('api_lecturer_shift.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                document.getElementById('loaderOverlay').style.display = 'none';
+                
+                alert(data.message);
+                if (data.status === 'SUCCESS') {
+                    window.location.reload();
+                }
+            } catch (err) {
+                document.getElementById('loaderOverlay').style.display = 'none';
+                alert('Request failed: ' + err.message);
+            }
+        }
 
         function updateAltOffsetDisplay(val) {
             const label = document.getElementById('altOffsetLabel');
@@ -628,9 +1035,19 @@ $scheduled_classes = $stmt->fetchAll();
 
         // Periodically ping current location to admin dashboard in background
         function startLiveLocationPinger() {
+            if (!isShiftActive) return;
+            
             if (navigator.geolocation) {
                 // Ping every 30 seconds
                 setInterval(() => {
+                    // Restrict pinger to school hours: 8 AM to 4 PM
+                    const now = new Date();
+                    const hours = now.getHours();
+                    if (hours < 8 || hours >= 16) {
+                        console.log("Pinger is inactive outside school working hours (8 AM - 4 PM)");
+                        return;
+                    }
+
                     navigator.geolocation.getCurrentPosition((position) => {
                         const lat = position.coords.latitude;
                         const lon = position.coords.longitude;
@@ -660,8 +1077,14 @@ $scheduled_classes = $stmt->fetchAll();
             formData.append('altitude', alt);
             
             try {
-                await fetch('api_ping_location.php', { method: 'POST', body: formData });
+                const response = await fetch('api_ping_location.php', { method: 'POST', body: formData });
+                const data = await response.json();
                 console.log("Background location ping sent:", {lat, lon, alt});
+                // If the response indicates shift has been auto-signed out, reload page
+                // (e.g. if the backend auto signs them out because they exited campus)
+                if (data.status === 'SUCCESS' && data.message === 'Location logged') {
+                    // We can check if status needs reload
+                }
             } catch(e) {
                 console.warn("Location ping failed:", e);
             }
@@ -871,6 +1294,76 @@ $scheduled_classes = $stmt->fetchAll();
             } catch (err) {
                 document.getElementById('loaderOverlay').style.display = 'none';
                 alert('Network request failed: ' + err.message);
+            }
+        // Schedule modal management functions
+        function openCreateScheduleModal() {
+            document.getElementById('modalTitle').textContent = "Add Schedule Slot";
+            document.getElementById('sched_action').value = "create";
+            document.getElementById('sched_class_id').value = "";
+            document.getElementById('scheduleForm').reset();
+            document.getElementById('scheduleModal').style.display = 'flex';
+        }
+
+        function openEditScheduleModal(classObj) {
+            document.getElementById('modalTitle').textContent = "Edit Schedule Slot";
+            document.getElementById('sched_action').value = "edit";
+            document.getElementById('sched_class_id').value = classObj.class_id;
+            
+            document.getElementById('sched_course_code').value = classObj.course_code;
+            document.getElementById('sched_course_title').value = classObj.course_title;
+            document.getElementById('sched_hall_id').value = classObj.hall_id;
+            document.getElementById('sched_date').value = classObj.scheduled_date;
+            
+            // Format start and end time (from H:i:s to H:i)
+            document.getElementById('sched_start_time').value = classObj.scheduled_start_time.substring(0, 5);
+            document.getElementById('sched_end_time').value = classObj.scheduled_end_time.substring(0, 5);
+            
+            document.getElementById('scheduleModal').style.display = 'flex';
+        }
+
+        function closeScheduleModal() {
+            document.getElementById('scheduleModal').style.display = 'none';
+        }
+
+        async function deleteScheduleSlot(classId) {
+            if (!confirm("Are you sure you want to delete this schedule slot?")) return;
+            
+            const formData = new FormData();
+            formData.append('action', 'delete');
+            formData.append('class_id', classId);
+
+            try {
+                const response = await fetch('api_manage_schedule.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                alert(data.message);
+                if (data.status === 'SUCCESS') {
+                    window.location.reload();
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            }
+        }
+
+        // Form submit handler for schedule
+        document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+
+            try {
+                const response = await fetch('api_manage_schedule.php', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                alert(data.message);
+                if (data.status === 'SUCCESS') {
+                    window.location.reload();
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
             }
         });
     </script>

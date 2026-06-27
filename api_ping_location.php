@@ -25,9 +25,18 @@ if ($latitude === null || $longitude === null) {
 }
 
 $lecturer_id = $_SESSION['user_id'];
+$current_time = date('H:i:s');
+$current_date = date('Y-m-d');
 
 try {
-    // Upsert live location record using PostgreSQL syntax
+    // 1. Log detailed location movement history
+    $stmt_log = $conn->prepare("
+        INSERT INTO lecturer_location_logs (lecturer_id, latitude, longitude, altitude)
+        VALUES (?, ?, ?, ?)
+    ");
+    $stmt_log->execute([$lecturer_id, $latitude, $longitude, $altitude]);
+
+    // 2. Upsert live location record for admin live tracking
     $stmt = $conn->prepare("
         INSERT INTO live_locations (lecturer_id, latitude, longitude, altitude, last_updated)
         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -39,6 +48,32 @@ try {
             last_updated = CURRENT_TIMESTAMP
     ");
     $stmt->execute([$lecturer_id, $latitude, $longitude, $altitude]);
+
+    // 3. Geofence premise checking for automatic sign-out (only between 8 AM and 4 PM)
+    if ($current_time >= '08:00:00' && $current_time <= '16:00:00') {
+        $distance = calculateHaversineDistance(CAMPUS_LAT, CAMPUS_LON, $latitude, $longitude);
+        
+        // If they are outside university boundary
+        if ($distance > CAMPUS_RADIUS_METERS) {
+            // Check if signed in but not signed out today
+            $stmt_shift = $conn->prepare("
+                SELECT shift_id FROM lecturer_shifts 
+                WHERE lecturer_id = ? AND work_date = ? AND sign_in_time IS NOT NULL AND sign_out_time IS NULL
+            ");
+            $stmt_shift->execute([$lecturer_id, $current_date]);
+            $active_shift = $stmt_shift->fetch();
+            
+            if ($active_shift) {
+                // Auto sign out
+                $stmt_out = $conn->prepare("
+                    UPDATE lecturer_shifts 
+                    SET sign_out_time = NOW(), sign_out_latitude = ?, sign_out_longitude = ?, sign_out_altitude = ?, sign_out_method = 'auto_geofence'
+                    WHERE shift_id = ?
+                ");
+                $stmt_out->execute([$latitude, $longitude, $altitude, $active_shift['shift_id']]);
+            }
+        }
+    }
     
     sendJsonResponse(['status' => 'SUCCESS', 'message' => 'Location logged']);
 } catch (PDOException $e) {

@@ -13,6 +13,63 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'admin') {
     exit;
 }
 
+// Get lecturer details AJAX handler
+if (isset($_GET['get_lecturer_details'])) {
+    try {
+        $lid = intval($_GET['get_lecturer_details']);
+        $date = isset($_GET['date']) && !empty($_GET['date']) ? $_GET['date'] : date('Y-m-d');
+        
+        // 1. Fetch lecturer profile
+        $stmt = $conn->prepare("SELECT user_id, username, email, full_name, phone, department, faculty, lecturer_number, profile_pic FROM users WHERE user_id = ?");
+        $stmt->execute([$lid]);
+        $profile = $stmt->fetch();
+        
+        if (!$profile) {
+            sendJsonResponse(['error' => 'Lecturer not found'], 404);
+        }
+        
+        // 2. Fetch classes scheduled
+        $stmt = $conn->prepare("
+            SELECT sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, sc.scheduled_date, lh.hall_name 
+            FROM scheduled_classes sc
+            JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
+            WHERE sc.lecturer_id = ?
+            ORDER BY sc.scheduled_date DESC, sc.scheduled_start_time ASC
+        ");
+        $stmt->execute([$lid]);
+        $schedule = $stmt->fetchAll();
+        
+        // 3. Fetch shift for selected date
+        $stmt = $conn->prepare("
+            SELECT sign_in_time, sign_in_latitude, sign_in_longitude, sign_in_altitude,
+                   sign_out_time, sign_out_latitude, sign_out_longitude, sign_out_altitude, sign_out_method
+            FROM lecturer_shifts
+            WHERE lecturer_id = ? AND work_date = ?
+        ");
+        $stmt->execute([$lid, $date]);
+        $shift = $stmt->fetch() ?: null;
+        
+        // 4. Fetch movement logs for selected date
+        $stmt = $conn->prepare("
+            SELECT latitude, longitude, altitude, logged_at 
+            FROM lecturer_location_logs
+            WHERE lecturer_id = ? AND CAST(logged_at AS DATE) = ?
+            ORDER BY logged_at ASC
+        ");
+        $stmt->execute([$lid, $date]);
+        $movement = $stmt->fetchAll();
+        
+        sendJsonResponse([
+            'profile' => $profile,
+            'schedule' => $schedule,
+            'shift' => $shift,
+            'movement' => $movement
+        ]);
+    } catch (PDOException $e) {
+        sendJsonResponse(['error' => $e->getMessage()], 500);
+    }
+}
+
 // Live tracking ping feed AJAX handler
 if (isset($_GET['get_live_pings'])) {
     try {
@@ -421,7 +478,29 @@ try {
             color: #cc0000;
             border: 1px solid #ff3333;
         }
+
+        /* Lecturer list item */
+        .lec-list-item {
+            padding: 12px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 6px;
+            transition: background 0.2s;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .lec-list-item:hover {
+            background: #e8f0fe;
+        }
+        .lec-list-item.selected {
+            background: #3a7bd5;
+            color: white;
+        }
+        .lec-list-item.selected div {
+            color: white !important;
+        }
     </style>
+
 </head>
 <body>
     <!-- Sidebar -->
@@ -433,6 +512,7 @@ try {
         <ul class="sidebar-menu">
             <li><a href="#" class="active" onclick="switchPanel('dashboard', this)">📊 Dashboard Overview</a></li>
             <li><a href="#" onclick="switchPanel('live-tracker-panel', this)">📡 Live Staff Tracker</a></li>
+            <li><a href="#" onclick="switchPanel('lecturers-panel', this)">👥 Lecturers Tab</a></li>
             <li><a href="#" onclick="switchPanel('add-hall-panel', this)">📍 Add Lecture Hall (3D)</a></li>
             <li><a href="#" onclick="switchPanel('schedule-panel', this)">📅 Schedule Class</a></li>
         </ul>
@@ -552,7 +632,114 @@ try {
             <p class="map-help">💡 This map displays active lecturer positions who are currently on shift. Refreshes automatically every 10 seconds.</p>
         </div>
 
+        <!-- Lecturers Tab Panel -->
+        <div id="lecturers-panel" class="panel">
+            <div class="panel-title">👥 Lecturers Management</div>
+            <div style="display: grid; grid-template-columns: 280px 1fr; gap: 25px; min-height: 600px;">
+                
+                <!-- Lecturer List Sidebar -->
+                <div style="background: #f8f9fb; border-radius: 10px; padding: 15px; overflow-y: auto; max-height: 700px;">
+                    <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #7f8c8d; margin-bottom: 12px;">All Registered Lecturers</div>
+                    <?php
+                    $all_lecturers = $conn->query("SELECT user_id, full_name, department, faculty, lecturer_number, profile_pic, is_active FROM users WHERE role = 'lecturer' ORDER BY full_name ASC")->fetchAll();
+                    if (count($all_lecturers) === 0): ?>
+                        <p style="font-size: 13px; color: #bdc3c7;">No lecturers registered yet.</p>
+                    <?php else: ?>
+                        <?php foreach ($all_lecturers as $lec): ?>
+                            <div class="lec-list-item" onclick="loadLecturerDetails(<?php echo $lec['user_id']; ?>)" id="lec-item-<?php echo $lec['user_id']; ?>">
+                                <div style="display:flex; align-items:center; gap: 10px;">
+                                    <?php if ($lec['profile_pic']): ?>
+                                        <img src="<?php echo htmlspecialchars($lec['profile_pic']); ?>" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #3a7bd5;">
+                                    <?php else: ?>
+                                        <div style="width: 38px; height: 38px; border-radius: 50%; background: #3a7bd5; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 15px;">
+                                            <?php echo strtoupper(substr($lec['full_name'], 0, 1)); ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <div>
+                                        <div style="font-weight: 700; font-size: 13px; color: #2c3e50;"><?php echo htmlspecialchars($lec['full_name']); ?></div>
+                                        <div style="font-size: 11px; color: #7f8c8d;"><?php echo htmlspecialchars($lec['department'] ?? ''); ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Lecturer Detail Panel -->
+                <div id="lecturerDetailPanel" style="display: none;">
+                    
+                    <!-- Profile Header -->
+                    <div style="display: flex; align-items: center; gap: 20px; background: linear-gradient(135deg, #3a7bd5 0%, #00d2ff 100%); border-radius: 12px; padding: 20px; color: white; margin-bottom: 20px;">
+                        <img id="ldProfilePic" src="" alt="Profile" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; border: 3px solid rgba(255,255,255,0.5); display: none;">
+                        <div id="ldInitialAvatar" style="width: 72px; height: 72px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 28px; font-weight: bold; color: white; border: 3px solid rgba(255,255,255,0.4);">?</div>
+                        <div>
+                            <div id="ldFullName" style="font-size: 22px; font-weight: 700;"></div>
+                            <div id="ldFaculty" style="font-size: 13px; opacity: 0.85;"></div>
+                            <div id="ldDept" style="font-size: 13px; opacity: 0.85;"></div>
+                            <div id="ldLecNum" style="font-size: 12px; opacity: 0.7; margin-top: 4px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Bio Data -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                        <div style="background: white; border-radius: 10px; padding: 15px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
+                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #7f8c8d; margin-bottom: 5px;">Email</div>
+                            <div id="ldEmail" style="font-size: 13px;"></div>
+                        </div>
+                        <div style="background: white; border-radius: 10px; padding: 15px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
+                            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #7f8c8d; margin-bottom: 5px;">Phone</div>
+                            <div id="ldPhone" style="font-size: 13px;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Shift Log & Date Picker -->
+                    <div style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <div style="font-size: 13px; font-weight: 700;">📅 Daily Shift Log</div>
+                            <input type="date" id="ldDatePicker" value="<?php echo date('Y-m-d'); ?>" onchange="reloadLecturerDate()" style="padding: 5px 10px; border-radius: 6px; border: 1px solid #dcdde1; font-size: 12px; width: auto;">
+                        </div>
+                        <div id="ldShiftInfo" style="font-size: 13px; color: #57606f;"></div>
+                    </div>
+
+                    <!-- Timetable -->
+                    <div style="background: white; border-radius: 10px; padding: 15px; margin-bottom: 20px; box-shadow: 0 1px 5px rgba(0,0,0,0.05); max-height: 200px; overflow-y: auto;">
+                        <div style="font-size: 13px; font-weight: 700; margin-bottom: 10px;">📚 Schedule / Timetable</div>
+                        <table style="margin-top: 0;">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Course</th>
+                                    <th>Time</th>
+                                    <th>Venue</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ldScheduleBody">
+                                <tr><td colspan="4" style="text-align:center; color:#bdc3c7;">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- 2D Movement Map -->
+                    <div style="background: white; border-radius: 10px; padding: 15px; box-shadow: 0 1px 5px rgba(0,0,0,0.05);">
+                        <div style="font-size: 13px; font-weight: 700; margin-bottom: 5px;">🗺️ Movement Map (Caleb University Campus)</div>
+                        <p style="font-size: 11px; color: #7f8c8d; margin-bottom: 10px;">Nodes (●) and connecting lines show lecturer movement path recorded for the selected date.</p>
+                        <div id="lecturerMovementMap" style="width: 100%; height: 350px; border-radius: 8px; border: 1px solid #e1e8ef;"></div>
+                        <div id="ldMovementCount" style="font-size: 12px; color: #7f8c8d; margin-top: 8px;"></div>
+                    </div>
+                </div>
+
+                <!-- Empty State if no lecturer selected -->
+                <div id="lecturerDetailEmpty" style="display: flex; align-items: center; justify-content: center; text-align: center; padding: 60px 20px;">
+                    <div>
+                        <div style="font-size: 50px; margin-bottom: 15px;">👈</div>
+                        <p style="color: #7f8c8d; font-weight: 600;">Select a lecturer from the list to view their details.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Add Lecture Hall Panel (3D) -->
+
         <div id="add-hall-panel" class="panel">
             <div class="panel-title">Configure 3D Lecture Hall Geofence</div>
             
@@ -799,6 +986,180 @@ try {
                 }, 100);
             }
         }
+
+        // ==============================
+        // Lecturer Detail & Movement Map
+        // ==============================
+        let currentLecturerId = null;
+        let movementMap = null;
+        let movementPolyline = null;
+        let movementMarkers = [];
+
+        async function loadLecturerDetails(lecId) {
+            currentLecturerId = lecId;
+            const date = document.getElementById('ldDatePicker').value;
+
+            // Highlight selected lecturer in list
+            document.querySelectorAll('.lec-list-item').forEach(el => el.classList.remove('selected'));
+            const selectedEl = document.getElementById('lec-item-' + lecId);
+            if (selectedEl) selectedEl.classList.add('selected');
+
+            // Show detail panel, hide empty state
+            document.getElementById('lecturerDetailPanel').style.display = 'block';
+            document.getElementById('lecturerDetailEmpty').style.display = 'none';
+
+            try {
+                const response = await fetch(`admin_dashboard.php?get_lecturer_details=${lecId}&date=${date}`);
+                const data = await response.json();
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                const p = data.profile;
+
+                // Profile
+                document.getElementById('ldFullName').textContent = p.full_name || '';
+                document.getElementById('ldFaculty').textContent = p.faculty ? `🏛️ ${p.faculty}` : '';
+                document.getElementById('ldDept').textContent = p.department ? `📂 ${p.department}` : '';
+                document.getElementById('ldLecNum').textContent = p.lecturer_number ? `🪪 ${p.lecturer_number}` : '';
+                document.getElementById('ldEmail').textContent = p.email || 'N/A';
+                document.getElementById('ldPhone').textContent = p.phone || 'N/A';
+
+                // Profile picture
+                const picEl = document.getElementById('ldProfilePic');
+                const avatarEl = document.getElementById('ldInitialAvatar');
+                if (p.profile_pic) {
+                    picEl.src = p.profile_pic;
+                    picEl.style.display = 'block';
+                    avatarEl.style.display = 'none';
+                } else {
+                    picEl.style.display = 'none';
+                    avatarEl.style.display = 'flex';
+                    avatarEl.textContent = (p.full_name || '?').charAt(0).toUpperCase();
+                }
+
+                // Shift info
+                const shiftEl = document.getElementById('ldShiftInfo');
+                if (data.shift) {
+                    const s = data.shift;
+                    const inTime = s.sign_in_time ? new Date(s.sign_in_time).toLocaleTimeString() : '—';
+                    const outTime = s.sign_out_time ? new Date(s.sign_out_time).toLocaleTimeString() : '—';
+                    const method = s.sign_out_method === 'auto_geofence' ? ' (Auto – Left Campus)' : s.sign_out_method === 'manual' ? ' (Manual)' : '';
+                    shiftEl.innerHTML = `
+                        <span style="color:#2ecc71; font-weight:bold;">✅ Signed In:</span> ${inTime} 
+                        &nbsp;|&nbsp; 
+                        <span style="color:#e74c3c; font-weight:bold;">🔴 Signed Out:</span> ${outTime}${method}
+                    `;
+                } else {
+                    shiftEl.innerHTML = `<span style="color:#7f8c8d;">No shift record found for this date.</span>`;
+                }
+
+                // Timetable / Schedule
+                const tbody = document.getElementById('ldScheduleBody');
+                if (data.schedule && data.schedule.length > 0) {
+                    tbody.innerHTML = data.schedule.map(sc => `
+                        <tr>
+                            <td>${sc.scheduled_date}</td>
+                            <td><strong>${sc.course_code}</strong><br><small style="color:#7f8c8d;">${sc.course_title}</small></td>
+                            <td>${sc.scheduled_start_time.substring(0,5)} – ${sc.scheduled_end_time.substring(0,5)}</td>
+                            <td>${sc.hall_name}</td>
+                        </tr>
+                    `).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#bdc3c7;">No schedule records found.</td></tr>';
+                }
+
+                // 2D Movement Map
+                setTimeout(() => {
+                    drawMovementMap(data.movement);
+                }, 150);
+
+            } catch (err) {
+                console.error('Failed to load lecturer details:', err);
+            }
+        }
+
+        function reloadLecturerDate() {
+            if (currentLecturerId) {
+                loadLecturerDetails(currentLecturerId);
+            }
+        }
+
+        function drawMovementMap(movementData) {
+            // Init map centred on Caleb University
+            if (!movementMap) {
+                movementMap = L.map('lecturerMovementMap').setView([6.6718, 3.4908], 16);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap'
+                }).addTo(movementMap);
+
+                // Draw campus geofence boundary
+                L.circle([6.6718, 3.4908], {
+                    color: '#3a7bd5',
+                    fillColor: '#3a7bd5',
+                    fillOpacity: 0.05,
+                    radius: 800,
+                    dashArray: '8,6',
+                    weight: 2
+                }).addTo(movementMap).bindTooltip('Caleb University Campus Boundary', { permanent: false });
+            } else {
+                // Clear old movement layers
+                movementMarkers.forEach(m => m.remove());
+                movementMarkers = [];
+                if (movementPolyline) {
+                    movementPolyline.remove();
+                    movementPolyline = null;
+                }
+            }
+
+            const countEl = document.getElementById('ldMovementCount');
+
+            if (!movementData || movementData.length === 0) {
+                countEl.textContent = 'No movement data logged for this date.';
+                return;
+            }
+
+            const latlngs = movementData.map(m => [parseFloat(m.latitude), parseFloat(m.longitude)]);
+
+            // Draw connecting polyline (movement path)
+            movementPolyline = L.polyline(latlngs, {
+                color: '#3a7bd5',
+                weight: 3,
+                opacity: 0.75,
+                dashArray: '4, 4'
+            }).addTo(movementMap);
+
+            // Draw node markers
+            latlngs.forEach((latlng, i) => {
+                const m = movementData[i];
+                const timeStr = new Date(m.logged_at).toLocaleTimeString();
+                const isFirst = i === 0;
+                const isLast = i === latlngs.length - 1;
+
+                let color = '#3a7bd5';
+                if (isFirst) color = '#2ecc71';
+                if (isLast) color = '#e74c3c';
+
+                const marker = L.circleMarker(latlng, {
+                    radius: isFirst || isLast ? 8 : 5,
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.9,
+                    weight: 2
+                }).addTo(movementMap)
+                  .bindPopup(`<strong>${isFirst ? '🟢 First Ping' : isLast ? '🔴 Last Ping' : '📍 Ping'}</strong><br>Time: ${timeStr}<br>Alt: ${parseFloat(m.altitude).toFixed(1)}m`);
+
+                movementMarkers.push(marker);
+            });
+
+            // Fit bounds to movement path
+            movementMap.fitBounds(L.polyline(latlngs).getBounds().pad(0.2));
+
+            countEl.textContent = `${movementData.length} location pings logged · First: ${new Date(movementData[0].logged_at).toLocaleTimeString()} · Last: ${new Date(movementData[movementData.length-1].logged_at).toLocaleTimeString()}`;
+        }
     </script>
 </body>
 </html>
+

@@ -28,6 +28,12 @@ define('MAX_DISTANCE_TOLERANCE', 50); // default horizontal tolerance (meters)
 define('ENABLE_LOGS', true);
 define('TIMEZONE', 'Africa/Lagos');
 
+// Caleb University Imota Campus Center Geofence
+define('CAMPUS_LAT', 6.67180000);
+define('CAMPUS_LON', 3.49080000);
+define('CAMPUS_RADIUS_METERS', 800);
+
+
 // Set timezone in PHP
 date_default_timezone_set(TIMEZONE);
 

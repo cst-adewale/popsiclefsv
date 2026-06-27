@@ -25,63 +25,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = isset($_POST['email']) ? sanitizeInput($_POST['email']) : '';
     $full_name = isset($_POST['full_name']) ? sanitizeInput($_POST['full_name']) : '';
     $phone = isset($_POST['phone']) ? sanitizeInput($_POST['phone']) : '';
+    $faculty = isset($_POST['faculty']) ? sanitizeInput($_POST['faculty']) : '';
     $department = isset($_POST['department']) ? sanitizeInput($_POST['department']) : '';
+    $lecturer_number = isset($_POST['lecturer_number']) ? sanitizeInput($_POST['lecturer_number']) : '';
     $password = isset($_POST['password']) ? $_POST['password'] : '';
     $confirm_password = isset($_POST['confirm_password']) ? $_POST['confirm_password'] : '';
     
-    if (!empty($username) && !empty($email) && !empty($full_name) && !empty($password) && !empty($confirm_password) && !empty($department)) {
-        if ($password !== $confirm_password) {
-            $error_message = 'Passwords do not match.';
-        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error_message = 'Please enter a valid email address.';
+    // Optional profile picture processing
+    $profile_pic = null;
+    if (isset($_FILES['profile_pic']) && $_FILES['profile_pic']['error'] === UPLOAD_ERR_OK) {
+        $file_tmp = $_FILES['profile_pic']['tmp_name'];
+        $file_size = $_FILES['profile_pic']['size'];
+        // Limit to 2MB to prevent huge db entries
+        if ($file_size > 2 * 1024 * 1024) {
+            $error_message = 'Profile picture must be smaller than 2MB.';
         } else {
-            try {
-                // Check if username already exists
-                $stmt = $conn->prepare("SELECT user_id FROM users WHERE username = ?");
-                $stmt->execute([$username]);
-                if ($stmt->fetch()) {
-                    $error_message = 'Username is already taken.';
-                } else {
-                    // Check if email already exists
-                    $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
-                    $stmt->execute([$email]);
-                    if ($stmt->fetch()) {
-                        $error_message = 'Email is already registered.';
-                    } else {
-                        // Hash password using SHA-256 to match the seed data and config
-                        $hashed_password = hash('sha256', $password);
-                        
-                        // Insert new lecturer
-                        $stmt = $conn->prepare("
-                            INSERT INTO users (username, password, email, full_name, phone, role, department, is_active)
-                            VALUES (?, ?, ?, ?, ?, 'lecturer', ?, TRUE)
-                        ");
-                        $stmt->execute([$username, $hashed_password, $email, $full_name, $phone, $department]);
-                        
-                        // Get the newly created user ID
-                        $new_user_id = $conn->lastInsertId();
-                        if (!$new_user_id) {
-                            // PostgreSQL fallback if lastInsertId is empty
-                            $stmt_id = $conn->prepare("SELECT user_id FROM users WHERE username = ?");
-                            $stmt_id->execute([$username]);
-                            $user_row = $stmt_id->fetch();
-                            $new_user_id = $user_row['user_id'] ?? null;
-                        }
-                        
-                        // Log audit trail
-                        if ($new_user_id) {
-                            logAuditTrail($new_user_id, 'USER_SIGNUP', 'users', $new_user_id);
-                        }
-                        
-                        $success_message = 'Registration successful! You can now log in.';
-                    }
-                }
-            } catch (PDOException $e) {
-                $error_message = 'Database error: ' . $e->getMessage();
-            }
+            $file_type = $_FILES['profile_pic']['type'];
+            $data = file_get_contents($file_tmp);
+            $profile_pic = 'data:' . $file_type . ';base64,' . base64_encode($data);
         }
-    } else {
-        $error_message = 'Please fill in all required fields.';
+    }
+    
+    if (empty($error_message)) {
+        if (!empty($username) && !empty($email) && !empty($full_name) && !empty($password) && !empty($confirm_password) && !empty($department) && !empty($faculty) && !empty($lecturer_number)) {
+            if ($password !== $confirm_password) {
+                $error_message = 'Passwords do not match.';
+            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $error_message = 'Please enter a valid email address.';
+            } else {
+                try {
+                    // Check if username already exists
+                    $stmt = $conn->prepare("SELECT user_id FROM users WHERE username = ?");
+                    $stmt->execute([$username]);
+                    if ($stmt->fetch()) {
+                        $error_message = 'Username is already taken.';
+                    } else {
+                        // Check if email already exists
+                        $stmt = $conn->prepare("SELECT user_id FROM users WHERE email = ?");
+                        $stmt->execute([$email]);
+                        if ($stmt->fetch()) {
+                            $error_message = 'Email is already registered.';
+                        } else {
+                            // Hash password using SHA-256 to match the seed data and config
+                            $hashed_password = hash('sha256', $password);
+                            
+                            // Insert new lecturer
+                            $stmt = $conn->prepare("
+                                INSERT INTO users (username, password, email, full_name, phone, role, faculty, department, lecturer_number, profile_pic, is_active)
+                                VALUES (?, ?, ?, ?, ?, 'lecturer', ?, ?, ?, ?, TRUE)
+                            ");
+                            $stmt->execute([$username, $hashed_password, $email, $full_name, $phone, $faculty, $department, $lecturer_number, $profile_pic]);
+                            
+                            // Get the newly created user ID
+                            $new_user_id = $conn->lastInsertId();
+                            if (!$new_user_id) {
+                                // PostgreSQL fallback if lastInsertId is empty
+                                $stmt_id = $conn->prepare("SELECT user_id FROM users WHERE username = ?");
+                                $stmt_id->execute([$username]);
+                                $user_row = $stmt_id->fetch();
+                                $new_user_id = $user_row['user_id'] ?? null;
+                            }
+                            
+                            // Log audit trail
+                            if ($new_user_id) {
+                                logAuditTrail($new_user_id, 'USER_SIGNUP', 'users', $new_user_id);
+                            }
+                            
+                            $success_message = 'Registration successful! You can now log in.';
+                        }
+                    }
+                } catch (PDOException $e) {
+                    $error_message = 'Database error: ' . $e->getMessage();
+                }
+            }
+        } else {
+            $error_message = 'Please fill in all required fields.';
+        }
     }
 }
 ?>
@@ -290,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         <?php endif; ?>
 
-        <form action="register.php" method="POST">
+        <form action="register.php" method="POST" enctype="multipart/form-data">
             <div class="form-grid">
                 <div class="form-group">
                     <label for="username">Username *</label>
@@ -312,14 +331,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="tel" id="phone" name="phone" placeholder="e.g. 08012345678" value="<?php echo isset($_POST['phone']) ? htmlspecialchars($_POST['phone']) : ''; ?>">
                 </div>
 
-                <div class="form-group full-width">
+                <div class="form-group">
+                    <label for="lecturer_number">Lecturer Number *</label>
+                    <input type="text" id="lecturer_number" name="lecturer_number" placeholder="e.g. CUL/2026/0123" required value="<?php echo isset($_POST['lecturer_number']) ? htmlspecialchars($_POST['lecturer_number']) : ''; ?>">
+                </div>
+
+                <div class="form-group">
+                    <label for="profile_pic">Profile Picture (Optional)</label>
+                    <input type="file" id="profile_pic" name="profile_pic" accept="image/*">
+                </div>
+
+                <div class="form-group">
+                    <label for="faculty">Faculty / College *</label>
+                    <select id="faculty" name="faculty" required onchange="updateDepartments()">
+                        <option value="" disabled selected>-- Select Faculty --</option>
+                        <option value="COCIM" <?php echo (isset($_POST['faculty']) && $_POST['faculty'] === 'COCIM') ? 'selected' : ''; ?>>College of Computing & Info Management (COCIM)</option>
+                        <option value="COPAS" <?php echo (isset($_POST['faculty']) && $_POST['faculty'] === 'COPAS') ? 'selected' : ''; ?>>College of Pure & Applied Sciences (COPAS)</option>
+                        <option value="CASMAS" <?php echo (isset($_POST['faculty']) && $_POST['faculty'] === 'CASMAS') ? 'selected' : ''; ?>>College of Arts, Social & Mgmt Sciences (CASMAS)</option>
+                        <option value="COLENSMA" <?php echo (isset($_POST['faculty']) && $_POST['faculty'] === 'COLENSMA') ? 'selected' : ''; ?>>College of Environmental Sciences (COLENSMA)</option>
+                        <option value="COLAW" <?php echo (isset($_POST['faculty']) && $_POST['faculty'] === 'COLAW') ? 'selected' : ''; ?>>College of Law (COLAW)</option>
+                        <option value="COLED" <?php echo (isset($_POST['faculty']) && $_POST['faculty'] === 'COLED') ? 'selected' : ''; ?>>College of Education (COLED)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
                     <label for="department">Department *</label>
                     <select id="department" name="department" required>
-                        <option value="" disabled selected>-- Select Department --</option>
-                        <option value="Computer Science" <?php echo (isset($_POST['department']) && $_POST['department'] === 'Computer Science') ? 'selected' : ''; ?>>Computer Science</option>
-                        <option value="Mathematics" <?php echo (isset($_POST['department']) && $_POST['department'] === 'Mathematics') ? 'selected' : ''; ?>>Mathematics</option>
-                        <option value="Physics" <?php echo (isset($_POST['department']) && $_POST['department'] === 'Physics') ? 'selected' : ''; ?>>Physics</option>
-                        <option value="ICT" <?php echo (isset($_POST['department']) && $_POST['department'] === 'ICT') ? 'selected' : ''; ?>>ICT / Computer Engineering</option>
+                        <option value="" disabled selected>-- Select Faculty First --</option>
                     </select>
                 </div>
 
@@ -341,5 +379,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Already have an account? <a href="login.php">Sign In here</a>
         </div>
     </div>
+
+    <script>
+        const facultyDeps = {
+            "COCIM": ["Computer Science", "Cybersecurity", "Software Engineering", "Information Systems"],
+            "COPAS": ["Microbiology", "Industrial Chemistry", "Biochemistry", "Physics with Electronics", "Mathematics", "Statistics"],
+            "CASMAS": ["Mass Communication", "Accounting", "Business Administration", "Economics", "Criminology and Security Studies"],
+            "COLENSMA": ["Architecture", "Building", "Quantity Surveying", "Estate Management"],
+            "COLAW": ["Law"],
+            "COLED": ["Educational Management", "Guidance & Counseling"]
+        };
+
+        function updateDepartments() {
+            const facultySel = document.getElementById('faculty');
+            const deptSel = document.getElementById('department');
+            const selectedFaculty = facultySel.value;
+
+            // Clear previous options
+            deptSel.innerHTML = '<option value="" disabled selected>-- Select Department --</option>';
+
+            if (selectedFaculty && facultyDeps[selectedFaculty]) {
+                facultyDeps[selectedFaculty].forEach(dept => {
+                    const opt = document.createElement('option');
+                    opt.value = dept;
+                    opt.textContent = dept;
+                    if (dept === "<?php echo isset($_POST['department']) ? $_POST['department'] : ''; ?>") {
+                        opt.selected = true;
+                    }
+                    deptSel.appendChild(opt);
+                });
+            }
+        }
+
+        // Trigger on load if validation failed and values were posted back
+        window.addEventListener('load', () => {
+            if (document.getElementById('faculty').value) {
+                updateDepartments();
+            }
+        });
+    </script>
 </body>
 </html>
