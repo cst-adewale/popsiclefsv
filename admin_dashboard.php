@@ -676,9 +676,9 @@ async function loadLecturerDetails(lecId) {
     if (movementPolyline) movementPolyline.removeFrom(movementMap);
     if (data.movement && data.movement.length) {
       const coords = data.movement.map(m => [parseFloat(m.latitude), parseFloat(m.longitude)]);
-      movementPolyline = L.polyline(coords, {color:'#2D6A4F', weight:2}).addTo(movementMap);
+      movementPolyline = L.polyline(coords, {color:'#8B5CF6', weight:2}).addTo(movementMap);
       coords.forEach((c,i) => {
-        const m = L.circleMarker(c, {radius:5, color:'#2D6A4F', fillColor:'#52A878', fillOpacity:1, weight:2}).addTo(movementMap);
+        const m = L.circleMarker(c, {radius:5, color:'#8B5CF6', fillColor:'#10B981', fillOpacity:1, weight:2}).addTo(movementMap);
         m.bindPopup(`Point ${i+1}<br>${data.movement[i].logged_at}`);
         movementMarkers.push(m);
       });

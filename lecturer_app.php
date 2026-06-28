@@ -84,7 +84,7 @@ $is_shift_active = $today_shift && $today_shift['sign_out_time'] === null;
 <title>Popsicle FSV — Lecturer</title>
 <!-- PWA -->
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#2D6A4F">
+<meta name="theme-color" content="#8B5CF6">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -473,7 +473,7 @@ function selectClass(cls) {
         mapInst = L.map('map-container').setView([cls.latitude, cls.longitude], 17);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(mapInst);
         L.circle([cls.latitude, cls.longitude],
-            {radius:cls.tolerance_radius_meters, color:'#2D6A4F', fillOpacity:.1, weight:2}).addTo(mapInst);
+            {radius:cls.tolerance_radius_meters, color:'#8B5CF6', fillOpacity:.1, weight:2}).addTo(mapInst);
         L.marker([cls.latitude, cls.longitude]).addTo(mapInst).bindPopup(cls.hall_name).openPopup();
     }, 80);
 }
@@ -506,11 +506,11 @@ function captureLocation() {
         userMarker = L.marker([rawLat, rawLon]).addTo(mapInst);
         mapInst.setView([rawLat, rawLon], 17);
 
-        btn.style.background = '#2D6A4F';
+        btn.style.background = '#8B5CF6';
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Location captured';
         document.getElementById('submitBtn').disabled = false;
     }, err => {
-        btn.style.background = '#2D6A4F';
+        btn.style.background = '#8B5CF6';
         btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/></svg> Retry location';
         alert('GPS error: ' + err.message);
     }, {enableHighAccuracy:true, timeout:10000});
