@@ -42,9 +42,35 @@ if ($action === 'signin') {
 
     try {
         // Check if already signed in today
-        $stmt = $conn->prepare("SELECT shift_id FROM lecturer_shifts WHERE lecturer_id = ? AND work_date = ?");
+        $stmt = $conn->prepare("SELECT shift_id, sign_out_time, sign_out_method FROM lecturer_shifts WHERE lecturer_id = ? AND work_date = ?");
         $stmt->execute([$lecturer_id, $current_date]);
-        if ($stmt->fetch()) {
+        $existing_shift = $stmt->fetch();
+        if ($existing_shift) {
+            if ($existing_shift['sign_out_time'] === null) {
+                echo json_encode(['status' => 'ERROR', 'message' => 'You have already signed in today.']);
+                exit;
+            }
+
+            if ($current_time < '16:00:00' && $existing_shift['sign_out_method'] === 'auto_geofence') {
+                $stmt = $conn->prepare("
+                    UPDATE lecturer_shifts
+                    SET sign_in_time = NOW(),
+                        sign_in_latitude = ?,
+                        sign_in_longitude = ?,
+                        sign_in_altitude = ?,
+                        sign_out_time = NULL,
+                        sign_out_latitude = NULL,
+                        sign_out_longitude = NULL,
+                        sign_out_altitude = NULL,
+                        sign_out_method = NULL
+                    WHERE shift_id = ?
+                ");
+                $stmt->execute([$latitude, $longitude, $altitude, $existing_shift['shift_id']]);
+                createNotification($lecturer_id, 'shift', 'Re-sign in recorded', 'You were signed back in after an automatic sign-out.', 'lecturer_shifts', $existing_shift['shift_id']);
+                echo json_encode(['status' => 'SUCCESS', 'message' => 'Successfully signed in again after automatic sign-out.']);
+                exit;
+            }
+
             echo json_encode(['status' => 'ERROR', 'message' => 'You have already signed in today.']);
             exit;
         }

@@ -16,6 +16,16 @@ if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'lecturer') {
 $lecturer_id = $_SESSION['user_id'];
 $full_name = $_SESSION['full_name'];
 
+$selected_week = $_GET['week'] ?? '';
+$week_start_date = null;
+if (preg_match('/^\\d{4}-W\\d{2}$/', $selected_week)) {
+    $week_start_date = date('Y-m-d', strtotime($selected_week . '-1'));
+} else {
+    $week_start_date = date('Y-m-d', strtotime('monday this week'));
+    $selected_week = date('o-\\WW', strtotime($week_start_date));
+}
+$week_end_date = date('Y-m-d', strtotime($week_start_date . ' +7 days'));
+
 // Get classes scheduled for today using PostgreSQL PDO syntax
 $stmt = $conn->prepare("
     SELECT sc.class_id, sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, 
@@ -41,19 +51,19 @@ $today_shift = $stmt_shift->fetch();
 $stmt_halls = $conn->query("SELECT hall_id, hall_name, hall_code FROM lecture_halls ORDER BY hall_name ASC");
 $all_halls = $stmt_halls->fetchAll();
 
-// Fetch weekly schedule Monday to Friday (current week starting Monday)
+// Fetch selected week lecturer schedules, then group them in the UI by weekday/date
 $stmt_week = $conn->prepare("
     SELECT sc.class_id, sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, sc.scheduled_date,
            lh.hall_id, lh.hall_name, sc.status
     FROM scheduled_classes sc
     JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
     WHERE sc.lecturer_id = ?
-      AND sc.scheduled_date >= DATE_TRUNC('week', CURRENT_DATE)
-      AND sc.scheduled_date < DATE_TRUNC('week', CURRENT_DATE) + INTERVAL '7 days'
+      AND sc.scheduled_date >= ?
+      AND sc.scheduled_date < ?
       AND EXTRACT(ISODOW FROM sc.scheduled_date) BETWEEN 1 AND 5
     ORDER BY sc.scheduled_date ASC, sc.scheduled_start_time ASC
 ");
-$stmt_week->execute([$lecturer_id]);
+$stmt_week->execute([$lecturer_id, $week_start_date, $week_end_date]);
 $week_classes = $stmt_week->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -736,28 +746,36 @@ $week_classes = $stmt_week->fetchAll();
                 <!-- Weekly Timetable Tab -->
                 <div id="weekScheduleTab" style="display: none;">
                     <div class="section-title">Weekly Monday - Friday Timetable</div>
+                    <div style="font-size:12px;color:#8B93A1;margin-bottom:10px">All saved weekday schedules are shown here, grouped by date.</div>
+                    <form method="GET" action="lecturer_app.php" style="display:flex;gap:10px;align-items:end;margin-bottom:12px">
+                        <div style="flex:1">
+                            <label for="weekPicker" style="display:block;font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Select Week</label>
+                            <input type="week" id="weekPicker" name="week" value="<?php echo htmlspecialchars($selected_week); ?>" style="width:100%;padding:10px 12px;border:1px solid #E5E8EE;border-radius:10px;font-family:'Outfit',sans-serif">
+                        </div>
+                        <button type="submit" class="btn btn-gps" style="padding:10px 14px;white-space:nowrap">Load Week</button>
+                    </form>
                     
                     <?php
-                    $days_map = [
-                        1 => 'Monday',
-                        2 => 'Tuesday',
-                        3 => 'Wednesday',
-                        4 => 'Thursday',
-                        5 => 'Friday'
-                    ];
+                    $grouped_days = [];
+                    foreach ($week_classes as $class) {
+                        $date_key = $class['scheduled_date'];
+                        if (!isset($grouped_days[$date_key])) {
+                            $grouped_days[$date_key] = [
+                                'label' => date('l, M j, Y', strtotime($date_key)),
+                                'classes' => []
+                            ];
+                        }
+                        $grouped_days[$date_key]['classes'][] = $class;
+                    }
                     
-                    foreach ($days_map as $day_num => $day_name):
-                        // Filter classes for this day
-                        $day_classes = array_filter($week_classes, function($c) use ($day_num) {
-                            return date('N', strtotime($c['scheduled_date'])) == $day_num;
-                        });
+                    if (empty($grouped_days)):
                     ?>
-                        <div class="timetable-day-header"><?php echo $day_name; ?></div>
-                        <?php if (empty($day_classes)): ?>
-                            <div style="padding: 10px; font-size: 12px; color: #bdc3c7; background: white; border-radius: 8px; margin-top: 5px;">No classes scheduled</div>
-                        <?php else: ?>
+                        <div style="padding: 10px; font-size: 12px; color: #bdc3c7; background: white; border-radius: 8px; margin-top: 5px;">No classes scheduled</div>
+                    <?php else: ?>
+                        <?php foreach ($grouped_days as $date_key => $dayData): ?>
+                            <div class="timetable-day-header"><?php echo htmlspecialchars($dayData['label']); ?></div>
                             <div style="background: white; border-radius: 8px; overflow: hidden; margin-top: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                <?php foreach ($day_classes as $class): ?>
+                                <?php foreach ($dayData['classes'] as $class): ?>
                                     <div class="timetable-item">
                                         <div class="timetable-time">
                                             <?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?>
@@ -767,7 +785,7 @@ $week_classes = $stmt_week->fetchAll();
                                             <span style="font-size: 11px; color: #7f8c8d;"><?php echo htmlspecialchars($class['hall_name']); ?></span>
                                         </div>
                                         <div class="timetable-actions">
-                                            <?php if (date('Y-m-d') === $class['scheduled_date'] && $class['status'] !== 'completed'): ?>
+                                            <?php if ($class['scheduled_date'] === date('Y-m-d') && $class['status'] !== 'completed'): ?>
                                             <button class="btn-small btn-edit" onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">Attend</button>
                                             <?php endif; ?>
                                             <button class="btn-small btn-edit" onclick="openEditScheduleModal(<?php echo htmlspecialchars(json_encode($class)); ?>)">Edit</button>
@@ -776,8 +794,8 @@ $week_classes = $stmt_week->fetchAll();
                                     </div>
                                 <?php endforeach; ?>
                             </div>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                     
                     <button class="btn-create-slot" onclick="openCreateScheduleModal()">+ Add New Class Slot</button>
                 </div>
