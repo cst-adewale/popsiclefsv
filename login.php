@@ -88,6 +88,7 @@ body{font-family:'Outfit',sans-serif;background:#f8f9fa;min-height:100vh;display
 .register-link a:hover{text-decoration:underline}
 .footer-note{text-align:center;font-size:11px;color:#8a95a3;margin-top:18px}
 </style>
+
 </head>
 <body>
 <div class="login-wrap">
