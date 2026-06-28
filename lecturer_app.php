@@ -1,74 +1,35 @@
 <?php
 /**
- * School Attendance Verification System
- * lecturer_app.php - Mobile-first Lecturer Check-in Application (Supabase Edition)
+ * lecturer_app.php  —  Popsicle FSV  |  Redesigned Lecturer App
+ *
+ * CHANGES FROM ORIGINAL:
+ *  1. White / off-white minimalist UI  (matches admin redesign)
+ *  2. Real calendar grid  —  week numbers (W1, W2 …) left column,
+ *     clicking a week number OR the whole row highlights it and plots
+ *     that week's timetable below; prev / next month arrows around grid
+ *  3. Re-sign-in allowed after auto sign-out as long as time < 16:00
+ *  4. Session kept alive on refresh  (no logout-on-refresh)
+ *  5. "Install App" button appears automatically when browser supports PWA install
+ *  6. Streamline-style flat SVG icons throughout
  */
-
 require 'config.php';
 session_start();
 
-// Auth check
+// ── Auth ──────────────────────────────────────────────────────────────────────
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'lecturer') {
     header('Location: login.php');
     exit;
 }
 
 $lecturer_id = $_SESSION['user_id'];
-$full_name = $_SESSION['full_name'];
+$full_name   = $_SESSION['full_name'];
 
-$selected_week = $_GET['week'] ?? '';
-$week_start_date = null;
-if (preg_match('/^\\d{4}-W\\d{2}$/', $selected_week)) {
-    $week_start_date = date('Y-m-d', strtotime($selected_week . '-1'));
-} else {
-    $week_start_date = date('Y-m-d', strtotime('monday this week'));
-    $selected_week = date('o-\\WW', strtotime($week_start_date));
-}
-$week_end_date = date('Y-m-d', strtotime($week_start_date . ' +7 days'));
-
-function weekLabelFromWeekParam($weekParam) {
-    if (!preg_match('/^(\\d{4})-W(\\d{2})$/', $weekParam, $matches)) {
-        return $weekParam;
-    }
-
-    $year = $matches[1];
-    $week = $matches[2];
-    $start = new DateTime();
-    $start->setISODate((int)$year, (int)$week, 1);
-    $end = clone $start;
-    $end->modify('+4 days');
-    return 'W' . $week . ' (' . $start->format('M j') . ' - ' . $end->format('M j') . ')';
-}
-
-$week_navigation = [];
-$baseWeek = new DateTime($week_start_date);
-for ($i = -4; $i <= 4; $i++) {
-    $weekStart = clone $baseWeek;
-    if ($i !== 0) {
-        $weekStart->modify(($i > 0 ? '+' : '') . ($i * 7) . ' days');
-    }
-    $weekStart->modify('monday this week');
-    $weekKey = $weekStart->format('o-\WW');
-    $weekNavigationLabel = weekLabelFromWeekParam($weekKey);
-    $week_navigation[] = [
-        'key' => $weekKey,
-        'label' => $weekNavigationLabel,
-        'active' => $weekKey === $selected_week,
-        'offset' => $i
-    ];
-}
-$selectedWeekIndex = 0;
-foreach ($week_navigation as $idx => $navWeek) {
-    if ($navWeek['active']) {
-        $selectedWeekIndex = $idx;
-        break;
-    }
-}
-
-// Get classes scheduled for today using PostgreSQL PDO syntax
+// ── Today's classes ───────────────────────────────────────────────────────────
 $stmt = $conn->prepare("
-    SELECT sc.class_id, sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, 
-           lh.hall_name, lh.latitude, lh.longitude, lh.altitude_meters, lh.tolerance_radius_meters, sc.status
+    SELECT sc.class_id, sc.course_code, sc.course_title,
+           sc.scheduled_start_time, sc.scheduled_end_time,
+           lh.hall_name, lh.latitude, lh.longitude,
+           lh.altitude_meters, lh.tolerance_radius_meters, sc.status
     FROM scheduled_classes sc
     JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
     WHERE sc.lecturer_id = ? AND sc.scheduled_date = CURRENT_DATE
@@ -77,1537 +38,862 @@ $stmt = $conn->prepare("
 $stmt->execute([$lecturer_id]);
 $scheduled_classes = $stmt->fetchAll();
 
-// Fetch today's shift status
+// ── Today's shift  ────────────────────────────────────────────────────────────
 $stmt_shift = $conn->prepare("
-    SELECT sign_in_time, sign_out_time, sign_out_method 
-    FROM lecturer_shifts 
+    SELECT sign_in_time, sign_out_time, sign_out_method
+    FROM lecturer_shifts
     WHERE lecturer_id = ? AND work_date = CURRENT_DATE
 ");
 $stmt_shift->execute([$lecturer_id]);
 $today_shift = $stmt_shift->fetch();
 
-// Fetch all lecture halls
-$stmt_halls = $conn->query("SELECT hall_id, hall_name, hall_code FROM lecture_halls ORDER BY hall_name ASC");
-$all_halls = $stmt_halls->fetchAll();
+// ── All halls (for schedule modal) ───────────────────────────────────────────
+$all_halls = $conn->query(
+    "SELECT hall_id, hall_name, hall_code FROM lecture_halls ORDER BY hall_name ASC"
+)->fetchAll();
 
-// Fetch selected week lecturer schedules, then group them in the UI by weekday/date
-$stmt_week = $conn->prepare("
-    SELECT sc.class_id, sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, sc.scheduled_date,
-           lh.hall_id, lh.hall_name, sc.status
-    FROM scheduled_classes sc
-    JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
-    WHERE sc.lecturer_id = ?
-      AND sc.scheduled_date >= ?
-      AND sc.scheduled_date < ?
-      AND EXTRACT(ISODOW FROM sc.scheduled_date) BETWEEN 1 AND 5
-    ORDER BY sc.scheduled_date ASC, sc.scheduled_start_time ASC
-");
-$stmt_week->execute([$lecturer_id, $week_start_date, $week_end_date]);
-$week_classes = $stmt_week->fetchAll();
+// ── All classes for JS calendar ───────────────────────────────────────────────
+try {
+    $stmt_all = $conn->prepare("
+        SELECT sc.class_id, sc.course_code, sc.course_title,
+               sc.scheduled_start_time, sc.scheduled_end_time,
+               sc.scheduled_date, lh.hall_name, sc.status
+        FROM scheduled_classes sc
+        JOIN lecture_halls lh ON sc.hall_id = lh.hall_id
+        WHERE sc.lecturer_id = ?
+        ORDER BY sc.scheduled_date ASC, sc.scheduled_start_time ASC
+    ");
+    $stmt_all->execute([$lecturer_id]);
+    $all_classes_js = $stmt_all->fetchAll();
+} catch (Exception $e) {
+    $all_classes_js = [];
+}
+
+// ── Sign-in / sign-out eligibility ───────────────────────────────────────────
+// Lecturer can sign in if:  no active shift OR shift was signed-out  AND  current hour < 16
+$now_hour    = (int)date('H');
+$can_signin  = ($now_hour < 16) && (!$today_shift || $today_shift['sign_out_time'] !== null);
+$can_signout = $today_shift && $today_shift['sign_out_time'] === null;
+$is_shift_active = $today_shift && $today_shift['sign_out_time'] === null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>Caleb FSV — Lecturer Portal</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-
-    <!-- ======= PWA MANIFEST ======= -->
-    <link rel="manifest" href="/manifest.json">
-
-    <!-- ======= PWA THEME ======= -->
-    <meta name="theme-color" content="#3a7bd5">
-    <meta name="mobile-web-app-capable" content="yes">
-
-    <!-- ======= iOS / APPLE PWA SUPPORT ======= -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Caleb FSV">
-    <link rel="apple-touch-icon" href="/icons/icon-512.png">
-    <!-- iOS Splash Screens (optional but recommended for best experience) -->
-    <link rel="apple-touch-startup-image" href="/icons/icon-512.png">
-
-    <!-- ======= STANDARD FAVICON ======= -->
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
-
-    <!-- ======= SEO / DESCRIPTION ======= -->
-    <meta name="description" content="GPS-verified lecturer check-in portal with 3D floor-level geofencing.">
-
-    <!-- Leaflet CSS for Map -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-
-    <!-- ======= SERVICE WORKER REGISTRATION ======= -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then((reg) => console.log('[PWA] Service Worker registered:', reg.scope))
-                    .catch((err) => console.warn('[PWA] Service Worker registration failed:', err));
-            });
-        }
-    </script>
-
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Outfit', sans-serif;
-        }
-
-        body {
-            background: #f7f8fa;
-            min-height: 100vh;
-            color: #2f3640;
-        }
-
-        /* App Header */
-        .app-shell {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            background: #f7f8fa;
-        }
-
-        .app-header {
-            background: linear-gradient(135deg, #214f3b 0%, #3a7bd5 100%);
-            padding: 18px 16px;
-            color: white;
-            box-shadow: 0 4px 15px rgba(58, 123, 213, 0.25);
-            flex-shrink: 0;
-        }
-
-        .header-top {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .user-info h2 {
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-
-        .user-info p {
-            font-size: 12px;
-            opacity: 0.85;
-        }
-
-        .logout-btn {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            text-decoration: none;
-            transition: background 0.3s;
-        }
-
-        .logout-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .install-btn {
-            background: #ffffff;
-            color: #214f3b;
-            border: 1px solid rgba(255,255,255,0.35);
-            padding: 6px 10px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 700;
-            cursor: pointer;
-            text-decoration: none;
-            display: none;
-        }
-
-        .install-btn:hover {
-            background: #f3f7f4;
-        }
-
-        /* Content Area */
-        .app-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 14px;
-            background-color: #f8f9fb;
-        }
-
-        .section-title {
-            font-size: 13px;
-            font-weight: 700;
-            text-transform: uppercase;
-            color: #7f8c8d;
-            margin-bottom: 10px;
-            margin-top: 5px;
-            letter-spacing: 0.5px;
-        }
-
-        /* Class Card Lists */
-        .class-card {
-            background: white;
-            border-radius: 14px;
-            padding: 15px;
-            margin-bottom: 12px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
-            border-left: 5px solid #3a7bd5;
-            transition: transform 0.2s, box-shadow 0.2s;
-            cursor: pointer;
-        }
-
-        .class-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-        }
-
-        .calendar-shell {
-            background: #fff;
-            border: 1px solid #e5e8ee;
-            border-radius: 14px;
-            padding: 12px;
-            box-shadow: 0 6px 18px rgba(26,26,46,0.04);
-            margin-bottom: 12px;
-        }
-
-        .calendar-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 10px;
-        }
-
-        .calendar-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: #1a1a2e;
-        }
-
-        .week-grid {
-            display: grid;
-            grid-template-columns: repeat(5, minmax(120px, 1fr));
-            gap: 8px;
-            overflow-x: auto;
-        }
-
-        .day-col {
-            min-width: 120px;
-            border: 1px solid #e5e8ee;
-            border-radius: 12px;
-            background: #fafbfc;
-            overflow: hidden;
-        }
-
-        .day-col.active {
-            border-color: #214f3b;
-            box-shadow: 0 8px 18px rgba(33,79,59,0.08);
-        }
-
-        .day-head {
-            padding: 8px 10px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            color: #fff;
-            background: linear-gradient(135deg, #214f3b, #3a7bd5);
-        }
-
-        .day-body {
-            padding: 8px;
-            min-height: 120px;
-        }
-
-        .day-empty {
-            font-size: 12px;
-            color: #8b93a1;
-            padding: 10px 2px;
-        }
-
-        .day-event {
-            background: #fff;
-            border: 1px solid #e5e8ee;
-            border-left: 4px solid #214f3b;
-            border-radius: 10px;
-            padding: 8px;
-            margin-bottom: 8px;
-        }
-
-        .day-event-time {
-            font-size: 11px;
-            color: #3a7bd5;
-            font-weight: 700;
-            margin-bottom: 4px;
-        }
-
-        .day-event-code {
-            font-size: 12px;
-            font-weight: 700;
-            color: #1a1a2e;
-        }
-
-        .day-event-venue {
-            font-size: 11px;
-            color: #8b93a1;
-            margin-top: 2px;
-        }
-
-        .calendar-nav-btn {
-            border: 1px solid #e5e8ee;
-            background: #fff;
-            color: #1a1a2e;
-            border-radius: 10px;
-            padding: 8px 10px;
-            font-weight: 700;
-            cursor: pointer;
-        }
-
-        .calendar-nav-btn:hover {
-            background: #f7f8fa;
-        }
-
-        .class-card.completed {
-            border-left-color: #2ecc71;
-            opacity: 0.85;
-        }
-
-        .class-card.active {
-            border: 2px solid #3a7bd5;
-            border-left-width: 6px;
-        }
-
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 8px;
-        }
-
-        .course-code {
-            font-size: 15px;
-            font-weight: 700;
-            color: #2c3e50;
-        }
-
-        .status-badge {
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 20px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .badge-scheduled { background-color: #ffeaa7; color: #d63031; }
-        .badge-completed { background-color: #d1fae5; color: #065f46; }
-
-        .course-title {
-            font-size: 13px;
-            color: #7f8c8d;
-            margin-bottom: 10px;
-        }
-
-        .card-meta {
-            display: flex;
-            justify-content: space-between;
-            font-size: 12px;
-            color: #57606f;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-
-        /* Checkin Form Style */
-        .checkin-form-container {
-            background: white;
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            display: none;
-            animation: slideUp 0.3s ease-out;
-        }
-
-        @keyframes slideUp {
-            from { transform: translateY(50px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #7f8c8d;
-            text-transform: uppercase;
-        }
-
-        input[readonly], textarea {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #e1e8ef;
-            border-radius: 8px;
-            font-size: 13px;
-            background-color: #fcfdfe;
-        }
-
-        textarea {
-            resize: none;
-            height: 70px;
-        }
-
-        textarea:focus {
-            outline: none;
-            border-color: #3a7bd5;
-        }
-
-        /* Action Buttons */
-        .btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-gps {
-            background-color: #3a7bd5;
-            color: white;
-            margin-bottom: 10px;
-        }
-
-        .btn-gps:hover { background-color: #2962b7; }
-
-        .btn-submit {
-            background-color: #2ecc71;
-            color: white;
-        }
-
-        .btn-submit:hover { background-color: #27ae60; }
-        .btn-submit:disabled {
-            background-color: #cbd5e0;
-            cursor: not-allowed;
-        }
-
-        .btn-cancel {
-            background-color: #e2e8f0;
-            color: #4a5568;
-            margin-top: 8px;
-        }
-
-        /* Leaflet Map Styling */
-        #map-container {
-            width: 100%;
-            height: 150px;
-            border-radius: 10px;
-            margin-bottom: 15px;
-            border: 1px solid #e1e8ef;
-        }
-
-        /* Results Box */
-        .result-box {
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 15px;
-            border-left: 4px solid;
-            font-size: 13px;
-            line-height: 1.5;
-        }
-
-        .result-box.success {
-            background-color: #ebfaf0;
-            border-left-color: #2ecc71;
-            color: #1e7e34;
-        }
-
-        .result-box.error {
-            background-color: #fdf2f2;
-            border-left-color: #e74c3c;
-            color: #c0392b;
-        }
-
-        .result-box.warning {
-            background-color: #fffaf0;
-            border-left-color: #f39c12;
-            color: #d35400;
-        }
-
-        /* Loader Overlay */
-        .loader-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255, 255, 255, 0.85);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            z-index: 1000;
-        }
-
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #3a7bd5;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin-bottom: 12px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Bottom Nav tab bar mockup */
-        .app-nav {
-            height: 60px;
-            background-color: white;
-            border-top: 1px solid #e1e8ef;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            flex-shrink: 0;
-        }
-
-        .nav-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            font-size: 10px;
-            color: #7f8c8d;
-            cursor: pointer;
-            text-decoration: none;
-        }
-
-        .nav-item.active {
-            color: #3a7bd5;
-        }
-
-        .nav-icon {
-            font-size: 20px;
-            margin-bottom: 3px;
-        }
-
-        /* Shift Card & Timetable Styles */
-        .shift-card {
-            background: white;
-            border-radius: 14px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
-            border: 1px solid #e1e8ef;
-        }
-        .shift-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 13px;
-            font-weight: bold;
-            color: #2c3e50;
-            border-bottom: 1px solid #f1f2f6;
-            padding-bottom: 8px;
-            margin-bottom: 10px;
-        }
-        .shift-btn-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .btn-shift {
-            padding: 10px;
-            font-size: 12px;
-            border-radius: 8px;
-            font-weight: bold;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 5px;
-            border: none;
-            cursor: pointer;
-            transition: opacity 0.2s;
-        }
-        .btn-shift-in {
-            background: #2ecc71;
-            color: white;
-        }
-        .btn-shift-out {
-            background: #e74c3c;
-            color: white;
-        }
-        .btn-shift:disabled {
-            background: #cbd5e0;
-            color: #718096;
-            cursor: not-allowed;
-        }
-        .timetable-container {
-            background: white;
-            border-radius: 14px;
-            padding: 15px;
-            margin-bottom: 15px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
-        }
-        .timetable-day-header {
-            font-weight: 700;
-            color: #2c3e50;
-            background: #f1f2f6;
-            padding: 6px 10px;
-            border-radius: 6px;
-            margin-top: 15px;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .timetable-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 10px;
-            border-bottom: 1px solid #f1f2f6;
-            font-size: 13px;
-        }
-        .timetable-item:last-child {
-            border-bottom: none;
-        }
-        .timetable-time {
-            font-weight: bold;
-            color: #3a7bd5;
-            min-width: 90px;
-        }
-        .timetable-details {
-            flex-grow: 1;
-            padding-left: 10px;
-        }
-        .timetable-actions {
-            display: flex;
-            gap: 5px;
-        }
-        .btn-small {
-            padding: 4px 8px;
-            font-size: 10px;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-            color: white;
-        }
-        .btn-edit { background: #3498db; }
-        .btn-delete { background: #e74c3c; }
-        .btn-create-slot {
-            background: #3a7bd5;
-            color: white;
-            padding: 8px 12px;
-            font-size: 12px;
-            font-weight: bold;
-            border-radius: 8px;
-            border: none;
-            cursor: pointer;
-            margin-top: 10px;
-            display: block;
-            width: 100%;
-            text-align: center;
-            text-decoration: none;
-        }
-
-        /* Modal Styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 2000;
-            justify-content: center;
-            align-items: center;
-        }
-        .modal-content {
-            background: white;
-            width: 90%;
-            max-width: 400px;
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            animation: slideUp 0.3s ease-out;
-        }
-        .modal-header {
-            font-weight: bold;
-            font-size: 16px;
-            color: #2c3e50;
-            margin-bottom: 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .modal-close {
-            cursor: pointer;
-            font-size: 20px;
-            color: #7f8c8d;
-        }
-        .modal select, .modal input {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 12px;
-            border: 1px solid #e1e8ef;
-            border-radius: 8px;
-            font-size: 13px;
-        }
-
-
-        /* Height/Altitude Simulator Panel style */
-        .simulator-badge {
-            background-color: #e0f7fa;
-            border: 1px solid #00acc1;
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 15px;
-            font-size: 12px;
-            color: #006064;
-        }
-
-        .slider-group {
-            margin-top: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .slider-group input {
-            flex-grow: 1;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Popsicle FSV — Lecturer</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2D6A4F">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="FSV">
+<link rel="apple-touch-icon" href="/icons/icon-512.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+            .then(r  => console.log('[PWA] SW:', r.scope))
+            .catch(er => console.warn('[PWA] SW failed:', er));
+    });
+}
+</script>
+<style>
+/* ── Reset ─────────────────────────────────────────────── */
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;color:#1A1A2E}
+
+/* ── Phone frame ──────────────────────────────────────── */
+.frame{background:#F7F8FA;width:100%;max-width:430px;min-height:100vh;display:flex;flex-direction:column;position:relative}
+@media(min-width:480px){
+    body{align-items:center;padding:20px 0}
+    .frame{min-height:auto;height:88vh;border-radius:28px;box-shadow:0 20px 60px rgba(0,0,0,.12);border:1px solid #E5E8EE;overflow:hidden}
+}
+
+/* ── Header ───────────────────────────────────────────── */
+.app-header{background:#FFFFFF;border-bottom:1px solid #E5E8EE;padding:16px 18px 14px;flex-shrink:0}
+.hdr-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.logo-row{display:flex;align-items:center;gap:8px}
+.logo-dot{width:28px;height:28px;background:#2D6A4F;border-radius:7px;display:flex;align-items:center;justify-content:center}
+.logo-dot svg{width:15px;height:15px}
+.app-name{font-size:13px;font-weight:700;color:#1A1A2E}
+.hdr-actions{display:flex;align-items:center;gap:8px}
+/* Install button — hidden until PWA prompt fires */
+.install-btn{display:none;align-items:center;gap:5px;padding:6px 11px;background:#EBF5EF;border:1px solid #86EFAC;border-radius:20px;font-size:11px;font-weight:600;color:#2D6A4F;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s}
+.install-btn:hover{background:#D1FAE5}
+.install-btn svg{width:13px;height:13px}
+.install-btn.show{display:flex}
+.logout-link{font-size:11px;font-weight:600;color:#8B93A1;text-decoration:none;padding:5px 10px;border:1px solid #E5E8EE;border-radius:20px}
+.welcome-lbl{font-size:11px;color:#8B93A1}
+.welcome-name{font-size:15px;font-weight:700;color:#1A1A2E}
+.date-chip{display:inline-flex;align-items:center;gap:5px;background:#F7F8FA;border:1px solid #E5E8EE;border-radius:20px;padding:4px 10px;font-size:11px;color:#4B5263;margin-top:6px}
+.date-chip svg{width:11px;height:11px;opacity:.6}
+
+/* ── Body ────────────────────────────────────────────── */
+.app-body{flex:1;overflow-y:auto;padding:14px 16px 80px}
+
+/* ── Shift card ──────────────────────────────────────── */
+.shift-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:14px;margin-bottom:14px}
+.shift-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.shift-title{font-size:12px;font-weight:700;color:#1A1A2E;display:flex;align-items:center;gap:6px}
+.shift-title svg{width:14px;height:14px}
+.status-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700}
+.pill-active{background:#EBF5EF;color:#2D6A4F}
+.pill-out{background:#F0F2F5;color:#8B93A1}
+.pill-none{background:#FEF2F2;color:#DC2626}
+.dot-live{width:6px;height:6px;border-radius:50%;background:#2D6A4F;display:inline-block;animation:blink 1.5s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.shift-info{font-size:12px;color:#4B5263;line-height:1.5;margin-bottom:10px}
+.re-signin-note{font-size:11px;color:#2D6A4F;font-style:italic;margin-top:3px}
+.shift-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn-shift{padding:10px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;transition:opacity .15s}
+.btn-shift svg{width:13px;height:13px}
+.btn-in{background:#2D6A4F;color:#fff}
+.btn-in:hover:not(:disabled){background:#3B7A57}
+.btn-out{background:#FEE2E2;color:#DC2626}
+.btn-out:hover:not(:disabled){background:#FECACA}
+.btn-shift:disabled{background:#F0F2F5;color:#B0B8C8;cursor:not-allowed}
+
+/* ── Tabs ────────────────────────────────────────────── */
+.tab-row{display:flex;background:#F0F2F5;border-radius:9px;padding:3px;gap:2px;margin-bottom:14px}
+.tab-btn{flex:1;padding:7px;background:none;border:none;border-radius:7px;font-size:12px;font-weight:500;color:#4B5263;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif}
+.tab-btn.active{background:#FFFFFF;color:#1A1A2E;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+
+/* ── Section label ───────────────────────────────────── */
+.sec-lbl{font-size:11px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.4px;margin-bottom:10px}
+
+/* ── Class cards ─────────────────────────────────────── */
+.class-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:13px;margin-bottom:9px;cursor:pointer;border-left:3px solid #2D6A4F;transition:box-shadow .15s}
+.class-card:hover{box-shadow:0 3px 12px rgba(0,0,0,.07)}
+.class-card.completed{border-left-color:#D1FAE5;opacity:.75}
+.cc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px}
+.cc-code{font-size:14px;font-weight:700;color:#1A1A2E}
+.cc-title{font-size:12px;color:#8B93A1;margin-bottom:9px}
+.cc-meta{display:flex;gap:14px;font-size:11px;color:#4B5263}
+.cc-meta span{display:flex;align-items:center;gap:4px}
+.cc-meta svg{width:11px;height:11px;opacity:.6}
+.badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.b-sched{background:#FFFBEB;color:#B45309}
+.b-done{background:#EBF5EF;color:#2D6A4F}
+.empty-day{text-align:center;padding:40px 20px;background:#FFFFFF;border-radius:12px;border:1px solid #E5E8EE}
+.empty-day p{font-size:13px;color:#8B93A1;margin-top:8px}
+
+/* ── CALENDAR ─────────────────────────────────────────── */
+.cal-wrap{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;overflow:hidden;margin-bottom:14px}
+.cal-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #F0F2F5}
+.cal-month-lbl{font-size:13px;font-weight:700;color:#1A1A2E}
+.cal-nav{width:28px;height:28px;border:1px solid #E5E8EE;border-radius:7px;background:#FFFFFF;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cal-nav:hover{background:#F7F8FA}
+.cal-nav svg{width:14px;height:14px;color:#4B5263}
+.cal-body{padding:8px 10px 12px}
+/* DOW header */
+.cal-dow-row{display:flex;margin-bottom:4px;padding-left:32px}
+.cal-dow-cell{flex:1;font-size:10px;font-weight:600;color:#8B93A1;text-align:center;padding:3px 0}
+/* Week rows */
+.cal-week-row{display:flex;align-items:center;margin-bottom:3px;border-radius:8px;cursor:pointer;padding:1px 0;transition:background .12s}
+.cal-week-row:hover{background:#F7F8FA}
+.cal-week-row.sel{background:#EBF5EF}
+/* Week number badge */
+.wn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:10px;font-weight:700;color:#8B93A1;flex-shrink:0;margin-right:2px}
+.cal-week-row.sel .wn{background:#2D6A4F;color:#FFFFFF}
+/* Day cells */
+.cal-day{flex:1;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:12px;color:#4B5263;position:relative}
+.cal-day.today{font-weight:700;color:#2D6A4F}
+.cal-day.today::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;background:#2D6A4F;border-radius:50%}
+.cal-day.other{color:#D1D5DB}
+.cal-day.has-cls::before{content:'';position:absolute;top:2px;right:3px;width:4px;height:4px;background:#52A878;border-radius:50%}
+
+/* ── Weekly timetable ────────────────────────────────── */
+.wt-wrap{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;overflow:hidden;margin-bottom:14px}
+.wt-title{padding:12px 14px;border-bottom:1px solid #F0F2F5;font-size:12px;font-weight:700;color:#1A1A2E}
+.wt-empty{padding:20px 14px;font-size:12px;color:#8B93A1;text-align:center}
+.wt-day-lbl{background:#F7F8FA;padding:6px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.4px;border-bottom:1px solid #F0F2F5}
+.wt-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #F0F2F5;gap:12px}
+.wt-row:last-child{border-bottom:none}
+.wt-time{font-size:11px;font-weight:700;color:#2D6A4F;min-width:88px}
+.wt-course{font-size:12px;font-weight:600;color:#1A1A2E}
+.wt-hall{font-size:11px;color:#8B93A1;margin-top:1px}
+.wt-none{padding:9px 14px;font-size:11px;color:#B0B8C8;font-style:italic;border-bottom:1px solid #F0F2F5}
+.wt-none:last-child{border-bottom:none}
+
+/* ── Check-in form ───────────────────────────────────── */
+.ci-wrap{display:none}
+.ci-wrap.show{display:block;animation:fadeUp .22s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.ci-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:16px}
+.ci-title{font-size:14px;font-weight:700;color:#1A1A2E;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.ci-title svg{width:15px;height:15px;color:#2D6A4F}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.3px}
+.field input,.field textarea{padding:9px 11px;border:1px solid #E5E8EE;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;color:#1A1A2E;background:#F7F8FA}
+.field input:focus,.field textarea:focus{outline:none;border-color:#52A878;background:#FFFFFF}
+.field textarea{resize:none;height:70px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#map-container{width:100%;height:140px;border-radius:9px;border:1px solid #E5E8EE;margin-bottom:12px}
+.btn-gps{width:100%;padding:11px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:8px;transition:background .15s}
+.btn-gps:hover{background:#3B7A57}
+.btn-gps svg{width:14px;height:14px}
+.btn-sub{width:100%;padding:11px;background:#52A878;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;margin-bottom:8px;transition:background .15s}
+.btn-sub:hover{background:#2D6A4F}
+.btn-sub:disabled{background:#E5E8EE;color:#B0B8C8;cursor:not-allowed}
+.btn-back{width:100%;padding:9px;background:none;border:1px solid #E5E8EE;border-radius:8px;font-size:12px;color:#4B5263;cursor:pointer;font-family:'Inter',sans-serif}
+.result-box{padding:12px;border-radius:8px;font-size:12px;line-height:1.5;border-left:3px solid;display:none}
+.result-box.success{background:#EBF5EF;border-color:#2D6A4F;color:#2D6A4F;display:block}
+.result-box.error{background:#FEF2F2;border-color:#DC2626;color:#DC2626;display:block}
+.result-box.warning{background:#FFFBEB;border-color:#B45309;color:#B45309;display:block}
+.alt-sim{background:#F0F7F4;border:1px solid #86EFAC;border-radius:8px;padding:10px;margin-bottom:12px}
+.alt-sim-lbl{font-size:10px;font-weight:700;color:#2D6A4F;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
+.alt-sim input[type=range]{width:100%;accent-color:#2D6A4F}
+.alt-sim-val{font-size:11px;color:#2D6A4F;margin-top:4px;font-weight:500}
+
+/* ── Loader ──────────────────────────────────────────── */
+.loader{position:absolute;inset:0;background:rgba(255,255,255,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:999;border-radius:inherit}
+.spinner{width:36px;height:36px;border:3px solid #E5E8EE;border-top-color:#2D6A4F;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader p{font-size:13px;font-weight:600;color:#1A1A2E}
+.loader small{font-size:11px;color:#8B93A1;margin-top:3px}
+
+/* ── Bottom nav ──────────────────────────────────────── */
+.bottom-nav{position:sticky;bottom:0;background:#FFFFFF;border-top:1px solid #E5E8EE;display:flex;justify-content:space-around;padding:10px 0 12px;flex-shrink:0}
+.nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:10px;color:#8B93A1;font-weight:500;border:none;background:none;font-family:'Inter',sans-serif;padding:0 12px}
+.nav-btn.active{color:#2D6A4F;font-weight:600}
+.nav-btn svg{width:20px;height:20px}
+
+/* ── Add-slot button ─────────────────────────────────── */
+.add-slot-btn{width:100%;padding:10px;background:#EBF5EF;border:1px solid #86EFAC;border-radius:8px;font-size:12px;font-weight:600;color:#2D6A4F;cursor:pointer;font-family:'Inter',sans-serif;margin-bottom:10px;transition:background .15s}
+.add-slot-btn:hover{background:#D1FAE5}
+
+/* ── Modal ───────────────────────────────────────────── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:2000;align-items:flex-end;justify-content:center}
+.modal-bg.show{display:flex}
+.modal-box{background:#FFFFFF;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:430px;animation:slideUp .22s ease}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.modal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.modal-hdr h3{font-size:15px;font-weight:700;color:#1A1A2E}
+.modal-close{width:28px;height:28px;border:1px solid #E5E8EE;border-radius:50%;background:#F7F8FA;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8B93A1}
+.m-field{margin-bottom:12px}
+.m-field label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.3px;margin-bottom:5px}
+.m-field input,.m-field select{width:100%;padding:9px 11px;border:1px solid #E5E8EE;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;color:#1A1A2E;background:#FFFFFF}
+.m-field input:focus,.m-field select:focus{outline:none;border-color:#52A878}
+.m-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn-modal-save{width:100%;padding:11px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;margin-top:4px}
+</style>
 </head>
 <body>
-    <div class="app-shell">
-        <!-- Loader Screen -->
-        <div class="loader-overlay" id="loaderOverlay">
-            <div class="spinner"></div>
-            <p style="font-weight: 600; color: #2c3e50;">Verifying 3D Geofence...</p>
-            <p style="font-size: 12px; color: #7f8c8d; margin-top: 5px;">Testing horizontal coordinates & altitude...</p>
+<div class="frame">
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <p>Verifying 3D geofence…</p>
+    <small>Checking coordinates &amp; altitude</small>
+  </div>
+
+  <!-- ── Header ─────────────────────────────────────────── -->
+  <div class="app-header">
+    <div class="hdr-row">
+      <div class="logo-row">
+        <div class="logo-dot">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         </div>
+        <span class="app-name">Popsicle FSV</span>
+      </div>
+      <div class="hdr-actions">
+        <!-- Appears automatically when browser fires beforeinstallprompt -->
+        <button class="install-btn" id="installBtn" onclick="triggerInstall()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Install App
+        </button>
+        <a href="logout.php" class="logout-link">Sign out</a>
+      </div>
+    </div>
+    <div class="welcome-lbl">Welcome back,</div>
+    <div class="welcome-name"><?php echo htmlspecialchars($full_name); ?></div>
+    <div class="date-chip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <?php echo date('l, F j, Y'); ?>
+    </div>
+  </div>
 
-        <!-- Header -->
-        <div class="app-header">
-            <div class="header-top">
-                <div class="user-info">
-                    <p>Welcome back,</p>
-                    <h2><?php echo htmlspecialchars($full_name); ?></h2>
-                </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-                    <button id="installAppBtn" class="install-btn" type="button">Install App</button>
-                    <a href="logout.php" class="logout-btn">Log Out</a>
-                </div>
-            </div>
-            <div style="font-size: 12px; opacity: 0.9; display: flex; align-items: center; gap: 5px;">
-                <span>📅 Today:</span> <strong><?php echo date('F d, Y'); ?></strong>
-            </div>
+  <!-- ── Body ───────────────────────────────────────────── -->
+  <div class="app-body">
+
+    <!-- ── Shift card ──────────────────────────────────── -->
+    <div class="shift-card">
+      <div class="shift-top">
+        <div class="shift-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Daily shift
         </div>
+        <?php if (!$today_shift): ?>
+          <span class="status-pill pill-none">Not signed in</span>
+        <?php elseif ($today_shift['sign_out_time'] === null): ?>
+          <span class="status-pill pill-active"><span class="dot-live"></span>Active</span>
+        <?php else: ?>
+          <span class="status-pill pill-out">Signed out <?php echo date('H:i', strtotime($today_shift['sign_out_time'])); ?></span>
+        <?php endif; ?>
+      </div>
 
-        <!-- Main Scrollable Content -->
-        <div class="app-content" id="appContent">
-            
-            <!-- Daily Shift Tracking Card -->
-            <div class="shift-card">
-                <div class="shift-header">
-                    <span>🕒 Daily Shift Status</span>
-                    <?php if (!$today_shift): ?>
-                        <span class="shift-status-inactive">🔴 NOT SIGNED IN</span>
-                    <?php elseif ($today_shift['sign_out_time'] === null): ?>
-                        <span class="shift-status-active">🟢 SIGNED IN</span>
-                    <?php else: ?>
-                        <span style="color: #7f8c8d; font-weight: bold;">⚫ SIGNED OUT (<?php echo date('H:i', strtotime($today_shift['sign_out_time'])); ?>)</span>
-                    <?php endif; ?>
-                </div>
-                <div style="font-size: 12px; color: #57606f; line-height: 1.4;">
-                    <?php if (!$today_shift): ?>
-                        Tracking runs 8am - 4pm. Sign in to start scanning.
-                    <?php elseif ($today_shift['sign_out_time'] === null): ?>
-                        Signed in at: <strong><?php echo date('H:i', strtotime($today_shift['sign_in_time'])); ?></strong><br>
-                        Location tracking is active. Leaving the campus geofence will automatically sign you out.
-                    <?php else: ?>
-                        Signed out at: <strong><?php echo date('H:i', strtotime($today_shift['sign_out_time'])); ?></strong> 
-                        (<?php echo $today_shift['sign_out_method'] === 'auto_geofence' ? 'Auto-detected off-campus' : 'Manual'; ?>)
-                    <?php endif; ?>
-                </div>
-                <div class="shift-btn-container">
-                    <button class="btn-shift btn-shift-in" id="shiftInBtn" onclick="handleShiftAction('signin')" 
-                        <?php echo ($today_shift) ? 'disabled' : ''; ?>>
-                        Sign In
-                    </button>
-                    <button class="btn-shift btn-shift-out" id="shiftOutBtn" onclick="handleShiftAction('signout')"
-                        <?php echo (!$today_shift || $today_shift['sign_out_time'] !== null) ? 'disabled' : ''; ?>>
-                        Sign Out
-                    </button>
-                </div>
-            </div>
+      <div class="shift-info">
+        <?php if (!$today_shift): ?>
+          Sign in starts at 08:00. You can sign in any time before 16:00.
+        <?php elseif ($today_shift['sign_out_time'] === null): ?>
+          Signed in at <strong><?php echo date('H:i', strtotime($today_shift['sign_in_time'])); ?></strong>.
+          Live tracking active. Leaving campus geofence auto-signs you out.
+        <?php else: ?>
+          Signed in <strong><?php echo date('H:i', strtotime($today_shift['sign_in_time'])); ?></strong>
+          &rarr; Signed out <strong><?php echo date('H:i', strtotime($today_shift['sign_out_time'])); ?></strong>
+          (<?php echo $today_shift['sign_out_method'] === 'auto_geofence' ? 'Auto — left campus' : 'Manual'; ?>).
+          <?php if ($can_signin): ?>
+          <div class="re-signin-note">You can sign back in — shift window is open until 16:00.</div>
+          <?php endif; ?>
+        <?php endif; ?>
+      </div>
 
-            <!-- Dynamic Classes View -->
-            <div id="scheduleSection">
-                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <button id="tabTodayBtn" class="btn btn-gps" style="flex: 1; padding: 8px; font-size: 12px; margin-bottom: 0;" onclick="switchScheduleTab('today')">Today's List</button>
-                    <button id="tabWeekBtn" class="btn btn-cancel" style="flex: 1; padding: 8px; font-size: 12px; margin-top: 0;" onclick="switchScheduleTab('week')">Weekly Timetable</button>
-                </div>
-                <button class="btn-create-slot" style="margin-bottom:12px;" onclick="openCreateScheduleModal()">+ Create New Schedule Slot</button>
-
-                <!-- Today Schedule Tab -->
-                <div id="todayScheduleTab">
-                    <div class="section-title">Today's Class Schedule</div>
-                    <?php if (count($scheduled_classes) === 0): ?>
-                        <div style="text-align: center; padding: 40px 20px; background: white; border-radius: 12px; margin-top: 10px;">
-                            <span style="font-size: 40px;">☕</span>
-                            <p style="font-weight: 600; margin-top: 10px; color: #7f8c8d;">No lectures scheduled today</p>
-                            <p style="font-size: 12px; color: #bdc3c7; margin-top: 5px;">Enjoy your free hours!</p>
-                        </div>
-                    <?php else: ?>
-                        <?php foreach ($scheduled_classes as $class): ?>
-                            <div class="class-card <?php echo $class['status'] === 'completed' ? 'completed' : ''; ?>" 
-                                 onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">
-                                <div class="card-header">
-                                    <span class="course-code"><?php echo htmlspecialchars($class['course_code']); ?></span>
-                                    <span class="status-badge badge-<?php echo $class['status']; ?>">
-                                        <?php echo htmlspecialchars($class['status']); ?>
-                                    </span>
-                                </div>
-                                <div class="course-title"><?php echo htmlspecialchars($class['course_title']); ?></div>
-                                <div class="card-meta">
-                                    <div class="meta-item">
-                                        <span>🕒</span>
-                                        <span><?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?></span>
-                                    </div>
-                                    <div class="meta-item">
-                                        <span>📍</span>
-                                        <span><?php echo htmlspecialchars($class['hall_name']); ?></span>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-
-                <!-- Weekly Timetable Tab -->
-                <div id="weekScheduleTab" style="display: none;">
-                    <div class="section-title">Weekly Monday - Friday Timetable</div>
-                    <div style="font-size:12px;color:#8B93A1;margin-bottom:10px">Pick an ISO week number first, then review the timetable for that week.</div>
-                    <div class="calendar-shell">
-                        <div class="calendar-head">
-                            <a class="calendar-nav-btn" href="lecturer_app.php?week=<?php echo urlencode($week_navigation[max(0, $selectedWeekIndex - 1)]['key']); ?>#weekScheduleTab">← Prev</a>
-                            <div class="calendar-title">Week <?php echo htmlspecialchars(explode(' ', $week_navigation[$selectedWeekIndex]['label'])[0]); ?></div>
-                            <a class="calendar-nav-btn" href="lecturer_app.php?week=<?php echo urlencode($week_navigation[min(count($week_navigation) - 1, $selectedWeekIndex + 1)]['key']); ?>#weekScheduleTab">Next →</a>
-                        </div>
-                        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px">
-                            <?php foreach ($week_navigation as $navWeek): ?>
-                                <a href="lecturer_app.php?week=<?php echo urlencode($navWeek['key']); ?>#weekScheduleTab" style="text-decoration:none;flex:0 0 auto;">
-                                    <div style="padding:8px 10px;border:1px solid <?php echo $navWeek['active'] ? '#214F3B' : '#E5E8EE'; ?>;border-radius:12px;background:<?php echo $navWeek['active'] ? '#214F3B' : '#fff'; ?>;color:<?php echo $navWeek['active'] ? '#fff' : '#1A1A2E'; ?>;min-width:110px;text-align:center;box-shadow:0 4px 12px rgba(26,26,46,0.04)">
-                                        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;opacity:.75">ISO</div>
-                                        <div style="font-size:15px;font-weight:700"><?php echo htmlspecialchars($navWeek['key']); ?></div>
-                                        <div style="font-size:11px;opacity:.8;margin-top:2px"><?php echo htmlspecialchars($navWeek['label']); ?></div>
-                                    </div>
-                                </a>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-                    
-                    <?php
-                    $days_map = [
-                        1 => 'Monday',
-                        2 => 'Tuesday',
-                        3 => 'Wednesday',
-                        4 => 'Thursday',
-                        5 => 'Friday'
-                    ];
-                    $days_payload = [];
-                    foreach ($days_map as $dayNum => $dayName) {
-                        $date = date('Y-m-d', strtotime($week_start_date . ' +' . ($dayNum - 1) . ' days'));
-                        $days_payload[] = [
-                            'name' => $dayName,
-                            'date' => $date,
-                            'classes' => array_values(array_filter($week_classes, function($c) use ($date) {
-                                return $c['scheduled_date'] === $date;
-                            }))
-                        ];
-                    }
-                    if (empty($week_classes)):
-                    ?>
-                        <div style="padding: 10px; font-size: 12px; color: #bdc3c7; background: white; border-radius: 8px; margin-top: 5px;">No classes scheduled</div>
-                    <?php else: ?>
-                        <div class="calendar-shell">
-                            <div class="week-grid">
-                                <?php foreach ($days_payload as $day): ?>
-                                    <div class="day-col <?php echo $day['date'] === date('Y-m-d') ? 'active' : ''; ?>">
-                                        <div class="day-head">
-                                            <?php echo htmlspecialchars($day['name']); ?>
-                                            <div style="font-size:10px;opacity:.8;text-transform:none;font-weight:500"><?php echo date('M j', strtotime($day['date'])); ?></div>
-                                        </div>
-                                        <div class="day-body">
-                                            <?php if (empty($day['classes'])): ?>
-                                                <div class="day-empty">No classes</div>
-                                            <?php else: ?>
-                                                <?php foreach ($day['classes'] as $class): ?>
-                                                    <div class="day-event">
-                                                        <div class="day-event-time"><?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?></div>
-                                                        <div class="day-event-code"><?php echo htmlspecialchars($class['course_code']); ?></div>
-                                                        <div class="day-event-venue"><?php echo htmlspecialchars($class['hall_name']); ?></div>
-                                                        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-                                                            <?php if ($class['scheduled_date'] === date('Y-m-d') && $class['status'] !== 'completed'): ?>
-                                                                <button class="btn-small btn-edit" onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">Attend</button>
-                                                            <?php endif; ?>
-                                                            <button class="btn-small btn-edit" onclick="openEditScheduleModal(<?php echo htmlspecialchars(json_encode($class)); ?>)">Edit</button>
-                                                        </div>
-                                                    </div>
-                                                <?php endforeach; ?>
-                                            <?php endif; ?>
-                                        </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                    <?php endif; ?>
-                    </div>
-                    
-                    <button class="btn-create-slot" onclick="openCreateScheduleModal()">+ Add New Class Slot</button>
-                </div>
-            </div>
-
-            <!-- Verification / Form View -->
-            <div id="checkinSection" class="checkin-form-container">
-                <div class="section-title" id="formTitle">Check-In Verification</div>
-                
-                <!-- 3D Altitude Simulator Control for Academic Demonstration -->
-                <div class="simulator-badge">
-                    <strong>📐 Altitude / Height Simulation</strong>
-                    <div class="slider-group">
-                        <input type="range" id="altOffset" min="-12" max="12" step="3" value="0" oninput="updateAltOffsetDisplay(this.value)">
-                        <span style="font-family: monospace; font-weight: bold; width: 65px; display: inline-block; text-align: right;" id="altOffsetLabel">0m (Match)</span>
-                    </div>
-                    <small style="font-size: 10px; color: #00838f; display: block; margin-top: 4px;">Slide to simulate being on different floor heights (+3m per floor).</small>
-                </div>
-
-                <form id="attendanceForm">
-                    <input type="hidden" id="class_id" name="class_id">
-                    
-                    <div id="map-container"></div>
-
-                    <div class="form-group">
-                        <label>Target Lecture Venue</label>
-                        <input type="text" id="hall_name" readonly>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div class="form-group">
-                            <label>Latitude</label>
-                            <input type="text" id="latitude" name="latitude" readonly placeholder="Awaiting GPS...">
-                        </div>
-                        <div class="form-group">
-                            <label>Longitude</label>
-                            <input type="text" id="longitude" name="longitude" readonly placeholder="Awaiting GPS...">
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div class="form-group">
-                            <label>Altitude (Meters)</label>
-                            <input type="text" id="altitude" name="altitude" readonly placeholder="Awaiting GPS...">
-                        </div>
-                        <div class="form-group">
-                            <label>GPS Accuracy (m)</label>
-                            <input type="text" id="accuracy" name="accuracy" readonly placeholder="Awaiting GPS...">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>Lecturer Log / Description</label>
-                        <textarea id="description" name="description" placeholder="e.g. Completed lecture topics on database normalization models." required minlength="5"></textarea>
-                    </div>
-
-                    <button type="button" class="btn btn-gps" id="getLocationBtn" onclick="retrieveLocation()">
-                        🛰️ Capture My Location
-                    </button>
-
-                    <button type="submit" class="btn btn-submit" id="submitBtn" disabled>
-                        ✓ Submit Attendance
-                    </button>
-
-                    <button type="button" class="btn btn-cancel" onclick="closeCheckinForm()">
-                        Back to Schedule
-                    </button>
-                </form>
-
-                <!-- Checkin Result Alert -->
-                <div id="resultBox" style="display: none;"></div>
-            </div>
-
-        </div>
-
-        <!-- Navigation Bar Mockup -->
-        <div class="app-nav">
-            <div class="nav-item active" onclick="closeCheckinForm()">
-                <span class="nav-icon">📅</span>
-                <span>Schedule</span>
-            </div>
-            <div class="nav-item" onclick="alert('Live Tracking status: ACTIVE. Admin can view your real-time position on the dashboard map.')">
-                <span class="nav-icon">📡</span>
-                <span>Live Status</span>
-            </div>
-        </div>
+      <div class="shift-btns">
+        <button class="btn-shift btn-in" id="shiftInBtn"
+          onclick="handleShift('signin')"
+          <?php echo $can_signin ? '' : 'disabled'; ?>>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          Sign In
+        </button>
+        <button class="btn-shift btn-out" id="shiftOutBtn"
+          onclick="handleShift('signout')"
+          <?php echo $can_signout ? '' : 'disabled'; ?>>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sign Out
+        </button>
+      </div>
     </div>
 
-    <!-- Schedule Manage Modal -->
-    <div id="scheduleModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <span id="modalTitle">Add Schedule Slot</span>
-                <span class="modal-close" onclick="closeScheduleModal()">&times;</span>
-            </div>
-            <form id="scheduleForm">
-                <input type="hidden" id="sched_action" name="action" value="create">
-                <input type="hidden" id="sched_class_id" name="class_id">
-                
-                <label for="sched_course_code">Course Code</label>
-                <input type="text" id="sched_course_code" name="course_code" placeholder="e.g. CSC 401" required>
-
-                <label for="sched_course_title">Course Title</label>
-                <input type="text" id="sched_course_title" name="course_title" placeholder="e.g. Compiler Construction" required>
-
-                <label for="sched_hall_id">Lecture Hall</label>
-                <select id="sched_hall_id" name="hall_id" required>
-                    <option value="" disabled selected>-- Select Hall --</option>
-                    <?php foreach ($all_halls as $hall): ?>
-                        <option value="<?php echo $hall['hall_id']; ?>"><?php echo htmlspecialchars($hall['hall_name'] . ' (' . $hall['hall_code'] . ')'); ?></option>
-                    <?php endforeach; ?>
-                </select>
-
-                <label for="sched_date">Schedule Date</label>
-                <input type="date" id="sched_date" name="scheduled_date" required>
-
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div>
-                        <label for="sched_start_time">Start Time</label>
-                        <input type="time" id="sched_start_time" name="start_time" required>
-                    </div>
-                    <div>
-                        <label for="sched_end_time">End Time</label>
-                        <input type="time" id="sched_end_time" name="end_time" required>
-                    </div>
-                </div>
-
-                <button type="submit" class="btn btn-gps" style="margin-top: 15px; margin-bottom: 0;">Save Schedule</button>
-            </form>
-        </div>
+    <!-- ── Tabs ────────────────────────────────────────── -->
+    <div class="tab-row">
+      <button class="tab-btn active" id="tabToday" onclick="switchTab('today')">Today's Classes</button>
+      <button class="tab-btn"        id="tabWeek"  onclick="switchTab('week')">Weekly Timetable</button>
     </div>
 
-    <!-- Leaflet JS Map Library -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script>
-        let deferredInstallPrompt = null;
+    <!-- ════════════════════════════════════════════════ -->
+    <!--  PANEL A — TODAY                                -->
+    <!-- ════════════════════════════════════════════════ -->
+    <div id="panelToday">
 
-        window.addEventListener('beforeinstallprompt', (event) => {
-            event.preventDefault();
-            deferredInstallPrompt = event;
-            const btn = document.getElementById('installAppBtn');
-            if (btn) btn.style.display = 'inline-flex';
-        });
+      <div id="classesList">
+        <div class="sec-lbl">Scheduled for today</div>
+        <?php if (count($scheduled_classes) === 0): ?>
+          <div class="empty-day">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <p>No classes scheduled for today</p>
+          </div>
+        <?php else: ?>
+          <?php foreach ($scheduled_classes as $cls): ?>
+          <div class="class-card <?php echo $cls['status'] === 'completed' ? 'completed' : ''; ?>"
+               onclick="selectClass(<?php echo htmlspecialchars(json_encode($cls)); ?>)">
+            <div class="cc-top">
+              <span class="cc-code"><?php echo htmlspecialchars($cls['course_code']); ?></span>
+              <span class="badge <?php echo $cls['status'] === 'completed' ? 'b-done' : 'b-sched'; ?>">
+                <?php echo ucfirst($cls['status']); ?>
+              </span>
+            </div>
+            <div class="cc-title"><?php echo htmlspecialchars($cls['course_title']); ?></div>
+            <div class="cc-meta">
+              <span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <?php echo date('H:i', strtotime($cls['scheduled_start_time'])) . '–' . date('H:i', strtotime($cls['scheduled_end_time'])); ?>
+              </span>
+              <span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                <?php echo htmlspecialchars($cls['hall_name']); ?>
+              </span>
+            </div>
+          </div>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </div>
 
-        window.addEventListener('appinstalled', () => {
-            deferredInstallPrompt = null;
-            const btn = document.getElementById('installAppBtn');
-            if (btn) btn.style.display = 'none';
-        });
+      <!-- Check-in form  -->
+      <div class="ci-wrap" id="ciWrap">
+        <div class="ci-card">
+          <div class="ci-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Check-in — <span id="ciCode"></span>
+          </div>
 
-        document.getElementById('installAppBtn')?.addEventListener('click', async () => {
-            if (!deferredInstallPrompt) return;
-            deferredInstallPrompt.prompt();
-            await deferredInstallPrompt.userChoice;
-            deferredInstallPrompt = null;
-            document.getElementById('installAppBtn').style.display = 'none';
-        });
+          <!-- Altitude simulator -->
+          <div class="alt-sim">
+            <div class="alt-sim-lbl">Floor / altitude simulator</div>
+            <input type="range" id="altOffset" min="-12" max="12" step="3" value="0" oninput="updateAltLbl(this.value)">
+            <div class="alt-sim-val" id="altLbl">0 m — Ground floor (match)</div>
+          </div>
 
-        let currentClass = null;
-        let map = null;
-        let userMarker = null;
-        let hallCircle = null;
-        let rawLatitude = null;
-        let rawLongitude = null;
-        let rawAltitude = 0.00;
-        let rawAccuracy = 15;
+          <form id="attendanceForm">
+            <input type="hidden" id="class_id" name="class_id">
+            <div id="map-container"></div>
 
-        let isShiftActive = <?php echo ($today_shift && $today_shift['sign_out_time'] === null) ? 'true' : 'false'; ?>;
+            <div class="field">
+              <label>Target venue</label>
+              <input type="text" id="hall_name" readonly>
+            </div>
+            <div class="two-col">
+              <div class="field"><label>Latitude</label><input type="text" id="latitude"  name="latitude"  readonly placeholder="Awaiting GPS…"></div>
+              <div class="field"><label>Longitude</label><input type="text" id="longitude" name="longitude" readonly placeholder="Awaiting GPS…"></div>
+            </div>
+            <div class="two-col">
+              <div class="field"><label>Altitude (m)</label><input type="text" id="altitude" name="altitude" readonly placeholder="Awaiting GPS…"></div>
+              <div class="field"><label>GPS accuracy (m)</label><input type="text" id="accuracy" name="accuracy" readonly placeholder="Awaiting GPS…"></div>
+            </div>
+            <div class="field">
+              <label>Lecture notes</label>
+              <textarea id="desc" name="description" placeholder="Describe today's lecture topic…" required minlength="5"></textarea>
+            </div>
 
-        // Background tracking pinger initialization
-        window.addEventListener('load', () => {
-            if (isShiftActive) {
-                startLiveLocationPinger();
-            }
-        });
+            <button type="button" class="btn-gps" id="gpsBtn" onclick="captureLocation()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/></svg>
+              Capture my location
+            </button>
+            <button type="submit" class="btn-sub" id="submitBtn" disabled>Submit attendance</button>
+            <button type="button" class="btn-back" onclick="closeCheckin()">&#8592; Back to schedule</button>
+          </form>
 
-        function switchScheduleTab(tabName) {
-            const todayTab = document.getElementById('todayScheduleTab');
-            const weekTab = document.getElementById('weekScheduleTab');
-            const todayBtn = document.getElementById('tabTodayBtn');
-            const weekBtn = document.getElementById('tabWeekBtn');
+          <div id="resultBox" class="result-box"></div>
+        </div>
+      </div>
 
-            if (tabName === 'today') {
-                todayTab.style.display = 'block';
-                weekTab.style.display = 'none';
-                todayBtn.className = 'btn btn-gps';
-                weekBtn.className = 'btn btn-cancel';
-                todayBtn.style.marginBottom = '0';
-                weekBtn.style.marginTop = '0';
-            } else {
-                todayTab.style.display = 'none';
-                weekTab.style.display = 'block';
-                todayBtn.className = 'btn btn-cancel';
-                weekBtn.className = 'btn btn-gps';
-                todayBtn.style.marginBottom = '0';
-                weekBtn.style.marginTop = '0';
-            }
+    </div><!-- /panelToday -->
+
+    <!-- ════════════════════════════════════════════════ -->
+    <!--  PANEL B — WEEKLY TIMETABLE + CALENDAR         -->
+    <!-- ════════════════════════════════════════════════ -->
+    <div id="panelWeek" style="display:none">
+
+      <!-- Calendar grid -->
+      <div class="cal-wrap">
+        <div class="cal-hdr">
+          <button class="cal-nav" onclick="calNav(-1)" title="Previous month">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div class="cal-month-lbl" id="calMonthLbl"></div>
+          <button class="cal-nav" onclick="calNav(1)" title="Next month">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <div class="cal-body" id="calBody"></div>
+      </div>
+
+      <!-- Timetable for selected week -->
+      <div class="wt-wrap">
+        <div class="wt-title" id="wtTitle">Select a week to view schedule</div>
+        <div id="wtBody"><div class="wt-empty">Click any week row or W-number in the calendar above.</div></div>
+      </div>
+
+      <button class="add-slot-btn" onclick="openModal()">
+        + Add / manage schedule slots
+      </button>
+
+    </div><!-- /panelWeek -->
+
+  </div><!-- /app-body -->
+
+  <!-- ── Bottom nav ──────────────────────────────────────── -->
+  <div class="bottom-nav">
+    <button class="nav-btn active" id="navSchedule" onclick="switchTab('today');setNav('navSchedule')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Schedule
+    </button>
+    <button class="nav-btn" id="navLive" onclick="alert('Live tracking is active. Admin can see your position on the dashboard map.')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/></svg>
+      Live Status
+    </button>
+  </div>
+
+</div><!-- /frame -->
+
+<!-- ── Add-slot modal ──────────────────────────────────── -->
+<div class="modal-bg" id="schedModal">
+  <div class="modal-box">
+    <div class="modal-hdr">
+      <h3 id="modalTitle">Add schedule slot</h3>
+      <button class="modal-close" onclick="closeModal()">&#215;</button>
+    </div>
+    <form id="scheduleForm">
+      <input type="hidden" id="sched_action"   name="action"   value="create">
+      <input type="hidden" id="sched_class_id" name="class_id">
+      <div class="m-field"><label>Course code</label><input type="text" id="sched_code"  name="course_code"  placeholder="e.g. CSC 401" required></div>
+      <div class="m-field"><label>Course title</label><input type="text" id="sched_title" name="course_title" placeholder="e.g. Compiler Construction" required></div>
+      <div class="m-field">
+        <label>Lecture hall</label>
+        <select id="sched_hall" name="hall_id" required>
+          <option value="" disabled selected>Select hall</option>
+          <?php foreach ($all_halls as $h): ?>
+          <option value="<?php echo $h['hall_id']; ?>">
+            <?php echo htmlspecialchars($h['hall_name'] . ' (' . $h['hall_code'] . ')'); ?>
+          </option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="m-field"><label>Date</label><input type="date" id="sched_date" name="scheduled_date" required></div>
+      <div class="m-two">
+        <div class="m-field"><label>Start</label><input type="time" id="sched_start" name="start_time" required></div>
+        <div class="m-field"><label>End</label><input type="time" id="sched_end"   name="end_time"   required></div>
+      </div>
+      <button type="submit" class="btn-modal-save">Save slot</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+<script>
+/* ─── All classes passed from PHP ─────────────────────── */
+const ALL_CLASSES = <?php echo json_encode($all_classes_js, JSON_UNESCAPED_UNICODE); ?>;
+const CLASS_DATES = new Set(ALL_CLASSES.map(c => c.scheduled_date));
+
+/* ─── State ───────────────────────────────────────────── */
+let mapInst = null, userMarker = null;
+let rawLat = null, rawLon = null, rawAlt = 0, rawAcc = 15;
+let isShiftActive = <?php echo $is_shift_active ? 'true' : 'false'; ?>;
+let calYear  = <?php echo (int)date('Y'); ?>;
+let calMonth = <?php echo (int)date('n') - 1; ?>; /* 0-based */
+let selWn = null, selWy = null;
+let calDone = false;
+
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DAYS   = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+/* ─── PWA Install ─────────────────────────────────────── */
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('installBtn').classList.add('show');
+});
+function triggerInstall() {
+    if (!deferredPrompt) {
+        alert('To install this app:\n• Android/Chrome: tap ⋮ menu → "Add to Home screen"\n• iOS/Safari: tap Share → "Add to Home Screen"');
+        return;
+    }
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(() => {
+        deferredPrompt = null;
+        document.getElementById('installBtn').classList.remove('show');
+    });
+}
+window.addEventListener('appinstalled', () => {
+    document.getElementById('installBtn').classList.remove('show');
+});
+
+/* ─── Tabs ────────────────────────────────────────────── */
+function switchTab(t) {
+    document.getElementById('panelToday').style.display = t === 'today' ? 'block' : 'none';
+    document.getElementById('panelWeek').style.display  = t === 'week'  ? 'block' : 'none';
+    document.getElementById('tabToday').classList.toggle('active', t === 'today');
+    document.getElementById('tabWeek').classList.toggle('active', t === 'week');
+    if (t === 'week' && !calDone) { calDone = true; initCal(); }
+}
+function setNav(id) {
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+/* ─── Shift actions ───────────────────────────────────── */
+async function handleShift(action) {
+    if (action === 'signin' && new Date().getHours() >= 16) {
+        alert('Sign-in is only available before 16:00.'); return;
+    }
+    document.getElementById('loader').style.display = 'flex';
+    const doSubmit = async (lat, lon, alt) => {
+        const fd = new FormData();
+        fd.append('action', action); fd.append('latitude', lat);
+        fd.append('longitude', lon); fd.append('altitude', alt);
+        try {
+            const d = await (await fetch('api_lecturer_shift.php', {method:'POST',body:fd})).json();
+            document.getElementById('loader').style.display = 'none';
+            if (d.status === 'SUCCESS' || d.status === 'ALREADY_SIGNED_IN') location.reload();
+            else alert(d.message || 'Shift action failed.');
+        } catch(e) {
+            document.getElementById('loader').style.display = 'none';
+            alert('Network error. Please try again.');
         }
+    };
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                const off = parseFloat(document.getElementById('altOffset')?.value || 0);
+                const alt = pos.coords.altitude !== null ? pos.coords.altitude + off : off;
+                doSubmit(pos.coords.latitude, pos.coords.longitude, alt);
+            },
+            () => doSubmit(6.6718, 3.4908, 0.00),
+            {enableHighAccuracy:true, timeout:6000}
+        );
+    } else doSubmit(6.6718, 3.4908, 0.00);
+}
 
-        function syncShiftButtons() {
-            const shiftInBtn = document.getElementById('shiftInBtn');
-            const shiftOutBtn = document.getElementById('shiftOutBtn');
-            if (!shiftInBtn || !shiftOutBtn) return;
+/* ─── Class selection ─────────────────────────────────── */
+function selectClass(cls) {
+    document.getElementById('class_id').value = cls.class_id;
+    document.getElementById('hall_name').value = cls.hall_name;
+    ['latitude','longitude','altitude','accuracy'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('ciCode').textContent = cls.course_code;
+    document.getElementById('resultBox').className = 'result-box';
+    document.getElementById('submitBtn').disabled = true;
+    rawLat = null;
 
-            const now = new Date();
-            const hour = now.getHours();
-            const minute = now.getMinutes();
-            const afterStart = hour > 8 || (hour === 8 && minute >= 0);
-            const beforeEnd = hour < 16;
+    document.getElementById('classesList').style.display = 'none';
+    document.getElementById('ciWrap').classList.add('show');
 
-            if (!shiftInBtn.disabled) {
-                shiftInBtn.disabled = !afterStart || !beforeEnd;
-            }
+    setTimeout(() => {
+        if (mapInst) { mapInst.remove(); mapInst = null; }
+        mapInst = L.map('map-container').setView([cls.latitude, cls.longitude], 17);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(mapInst);
+        L.circle([cls.latitude, cls.longitude],
+            {radius:cls.tolerance_radius_meters, color:'#2D6A4F', fillOpacity:.1, weight:2}).addTo(mapInst);
+        L.marker([cls.latitude, cls.longitude]).addTo(mapInst).bindPopup(cls.hall_name).openPopup();
+    }, 80);
+}
+function closeCheckin() {
+    document.getElementById('ciWrap').classList.remove('show');
+    document.getElementById('classesList').style.display = 'block';
+    if (mapInst) { mapInst.remove(); mapInst = null; }
+}
 
-            if (shiftOutBtn.disabled && <?php echo isset($today_shift) && $today_shift && $today_shift['sign_out_time'] === null ? 'true' : 'false'; ?>) {
-                shiftOutBtn.disabled = false;
-            }
+/* ─── GPS capture ─────────────────────────────────────── */
+function captureLocation() {
+    if (!navigator.geolocation) { alert('Geolocation not supported.'); return; }
+    const btn = document.getElementById('gpsBtn');
+    btn.style.background = '#52A878';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/></svg> Locating\u2026';
+
+    navigator.geolocation.getCurrentPosition(pos => {
+        const off = parseFloat(document.getElementById('altOffset').value) || 0;
+        rawLat = pos.coords.latitude;
+        rawLon = pos.coords.longitude;
+        rawAlt = (pos.coords.altitude !== null) ? (pos.coords.altitude + off) : off;
+        rawAcc = pos.coords.accuracy || 15;
+
+        document.getElementById('latitude').value  = rawLat.toFixed(7);
+        document.getElementById('longitude').value = rawLon.toFixed(7);
+        document.getElementById('altitude').value  = rawAlt.toFixed(2);
+        document.getElementById('accuracy').value  = rawAcc.toFixed(1);
+
+        if (userMarker) mapInst.removeLayer(userMarker);
+        userMarker = L.marker([rawLat, rawLon]).addTo(mapInst);
+        mapInst.setView([rawLat, rawLon], 17);
+
+        btn.style.background = '#2D6A4F';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> Location captured';
+        document.getElementById('submitBtn').disabled = false;
+    }, err => {
+        btn.style.background = '#2D6A4F';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/></svg> Retry location';
+        alert('GPS error: ' + err.message);
+    }, {enableHighAccuracy:true, timeout:10000});
+}
+function updateAltLbl(v) {
+    const n = parseFloat(v);
+    document.getElementById('altLbl').textContent =
+        `${n} m — ${n===0 ? 'Ground floor (match)' : (n>0 ? `+${n}m (~${Math.round(n/3)} floor up)` : `${n}m below`)}`;
+}
+
+/* ─── Attendance submit ───────────────────────────────── */
+document.getElementById('attendanceForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    if (!rawLat) { alert('Capture your location first.'); return; }
+    const notes = document.getElementById('desc').value.trim();
+    if (notes.length < 5) { alert('Add a brief lecture note (min 5 characters).'); return; }
+
+    document.getElementById('loader').style.display = 'flex';
+    const fd = new FormData();
+    fd.append('class_id',    document.getElementById('class_id').value);
+    fd.append('latitude',    rawLat);
+    fd.append('longitude',   rawLon);
+    fd.append('altitude',    rawAlt);
+    fd.append('accuracy',    rawAcc);
+    fd.append('description', notes);
+
+    try {
+        const d = await (await fetch('api_submit_attendance.php', {method:'POST', body:fd})).json();
+        document.getElementById('loader').style.display = 'none';
+        const box = document.getElementById('resultBox');
+        box.style.display = 'block';
+        if (d.verification_status === 'VERIFIED') {
+            box.className = 'result-box success';
+            box.innerHTML = `<strong>Attendance verified!</strong><br>${d.spatial?.message||''}<br>${d.altitude?.message||''}<br>${d.temporal?.message||''}`;
+        } else if (d.verification_status === 'OUT_OF_RANGE') {
+            box.className = 'result-box error';
+            box.innerHTML = `<strong>Out of range</strong><br>${d.spatial?.message||''}<br>Distance: ${d.spatial?.distance}m`;
+        } else if (d.verification_status === 'INVALID_ALTITUDE') {
+            box.className = 'result-box warning';
+            box.innerHTML = `<strong>Wrong floor / altitude</strong><br>${d.altitude?.message||''}`;
+        } else {
+            box.className = 'result-box warning';
+            box.innerHTML = `<strong>${d.verification_status}</strong><br>${d.temporal?.message||d.anomaly?.reason||'Recorded for review.'}`;
         }
+        document.getElementById('submitBtn').disabled = true;
+    } catch(err) {
+        document.getElementById('loader').style.display = 'none';
+        alert('Submission error: ' + err.message);
+    }
+});
 
-        async function handleShiftAction(action) {
-            if (action === 'signin') {
-                const now = new Date();
-                if (now.getHours() < 8) {
-                    alert("Sign-in is not active until 8:00 AM.");
-                    return;
-                }
-            }
-            
-            document.getElementById('loaderOverlay').style.display = 'flex';
-            
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(async (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    const altOffset = parseFloat(document.getElementById('altOffset').value) || 0;
-                    const alt = (position.coords.altitude !== null) ? (position.coords.altitude + altOffset) : (0.00 + altOffset);
-                    
-                    await submitShift(action, lat, lon, alt);
-                }, async (err) => {
-                    // Fallback to Caleb University coordinates for demo/testing if GPS fails
-                    await submitShift(action, 6.6718, 3.4908, 0.00);
-                }, { enableHighAccuracy: true, timeout: 5000 });
-            } else {
-                await submitShift(action, 6.6718, 3.4908, 0.00);
-            }
+/* ─────────────────────────────────────────────────────── */
+/*  CALENDAR                                               */
+/* ─────────────────────────────────────────────────────── */
+function isoWeek(date) {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+    const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return { w: Math.ceil(((d - ys) / 86400000 + 1) / 7), y: d.getUTCFullYear() };
+}
+function weekBounds(wn, wy) {
+    const s = new Date(Date.UTC(wy, 0, 1 + (wn - 1) * 7));
+    const dow = s.getUTCDay() || 7;
+    const mon = new Date(s); mon.setUTCDate(s.getUTCDate() - dow + 1);
+    const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
+    return { mon, sun };
+}
+function ymd(d) { return d.toISOString().slice(0, 10); }
+
+function initCal() {
+    const now = new Date();
+    const { w, y } = isoWeek(now);
+    selWn = w; selWy = y;
+    renderCal();
+    renderWT(w, y);
+}
+function calNav(dir) {
+    calMonth += dir;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    if (calMonth <  0) { calMonth = 11; calYear--; }
+    renderCal();
+}
+
+function renderCal() {
+    document.getElementById('calMonthLbl').textContent = MONTHS[calMonth] + ' ' + calYear;
+    const today = ymd(new Date());
+    const first = new Date(calYear, calMonth, 1);
+    const last  = new Date(calYear, calMonth + 1, 0);
+    const startDow = (first.getDay() || 7) - 1;
+    const cur = new Date(first);
+    cur.setDate(first.getDate() - startDow);
+
+    let html = '<div class="cal-dow-row">';
+    DAYS.forEach(d => html += `<div class="cal-dow-cell">${d}</div>`);
+    html += '</div>';
+
+    while (true) {
+        const { w: wn, y: wy } = isoWeek(cur);
+        const isSel = wn === selWn && wy === selWy;
+        html += `<div class="cal-week-row${isSel?' sel':''}" onclick="selectWeek(${wn},${wy})">`;
+        html += `<div class="wn">W${wn}</div>`;
+        for (let i = 0; i < 7; i++) {
+            const ds = ymd(cur);
+            const isT = ds === today;
+            const isO = cur.getMonth() !== calMonth;
+            const hasCl = CLASS_DATES.has(ds);
+            html += `<div class="cal-day${isT?' today':''}${isO?' other':''}${hasCl?' has-cls':''}">${cur.getDate()}</div>`;
+            cur.setDate(cur.getDate() + 1);
         }
+        html += '</div>';
+        if (cur > last && cur.getMonth() !== calMonth) break;
+    }
+    document.getElementById('calBody').innerHTML = html;
+}
 
-        async function submitShift(action, lat, lon, alt) {
-            const formData = new FormData();
-            formData.append('action', action);
-            formData.append('latitude', lat);
-            formData.append('longitude', lon);
-            formData.append('altitude', alt);
+function selectWeek(wn, wy) {
+    selWn = wn; selWy = wy;
+    renderCal();
+    renderWT(wn, wy);
+}
 
-            try {
-                const response = await fetch('api_lecturer_shift.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                document.getElementById('loaderOverlay').style.display = 'none';
-                
-                alert(data.message);
-                if (data.status === 'SUCCESS') {
-                    window.location.reload();
-                }
-            } catch (err) {
-                document.getElementById('loaderOverlay').style.display = 'none';
-                alert('Request failed: ' + err.message);
-            }
+function renderWT(wn, wy) {
+    const { mon } = weekBounds(wn, wy);
+    const dayNames = ['Monday','Tuesday','Wednesday','Thursday','Friday'];
+    const dates = [];
+    for (let i = 0; i < 5; i++) {
+        const d = new Date(mon);
+        d.setDate(mon.getDate() + i);
+        dates.push(ymd(d));
+    }
+
+    const { sun } = weekBounds(wn, wy);
+    const fmt = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', {day:'numeric', month:'short'});
+    document.getElementById('wtTitle').textContent =
+        `Week ${wn} — ${fmt(dates[0])} to ${new Date(sun).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}`;
+
+    let html = '';
+    dates.forEach((ds, i) => {
+        const day_cls = ALL_CLASSES.filter(c => c.scheduled_date === ds);
+        html += `<div class="wt-day-lbl">${dayNames[i]} · ${fmt(ds)}</div>`;
+        if (day_cls.length === 0) {
+            html += `<div class="wt-none">No classes scheduled</div>`;
+        } else {
+            day_cls.forEach(c => {
+                const st = c.scheduled_start_time.slice(0,5);
+                const et = c.scheduled_end_time.slice(0,5);
+                const done = c.status === 'completed' ? '<span class="badge b-done" style="font-size:9px;margin-left:5px">Done</span>' : '';
+                html += `<div class="wt-row">
+                    <div class="wt-time">${st}&#8211;${et}</div>
+                    <div>
+                        <div class="wt-course">${c.course_code}${done}</div>
+                        <div class="wt-hall">${c.hall_name}</div>
+                    </div>
+                </div>`;
+            });
         }
+    });
+    document.getElementById('wtBody').innerHTML = html || '<div class="wt-empty">No classes this week.</div>';
+}
 
-        function updateAltOffsetDisplay(val) {
-            const label = document.getElementById('altOffsetLabel');
-            let text = val + 'm';
-            if (val > 0) text = '+' + text;
-            if (val == 0) text += ' (Match)';
-            label.textContent = text;
-            
-            // Recalculate and display simulated altitude if location is already captured
-            if (rawLatitude !== null) {
-                const simulatedAlt = rawAltitude + parseFloat(val);
-                document.getElementById('altitude').value = simulatedAlt.toFixed(2);
-            }
-        }
+/* ─── Schedule modal ──────────────────────────────────── */
+function openModal(cls) {
+    document.getElementById('schedModal').classList.add('show');
+    if (cls) {
+        document.getElementById('modalTitle').textContent      = 'Edit slot';
+        document.getElementById('sched_action').value          = 'update';
+        document.getElementById('sched_class_id').value        = cls.class_id;
+        document.getElementById('sched_code').value            = cls.course_code;
+        document.getElementById('sched_title').value           = cls.course_title;
+        document.getElementById('sched_date').value            = cls.scheduled_date;
+        document.getElementById('sched_start').value           = cls.scheduled_start_time.slice(0,5);
+        document.getElementById('sched_end').value             = cls.scheduled_end_time.slice(0,5);
+    } else {
+        document.getElementById('modalTitle').textContent = 'Add schedule slot';
+        document.getElementById('sched_action').value = 'create';
+        document.getElementById('scheduleForm').reset();
+    }
+}
+function closeModal() { document.getElementById('schedModal').classList.remove('show'); }
 
-        // Periodically ping current location to admin dashboard in background
-        function startLiveLocationPinger() {
-            if (!isShiftActive) return;
-            
-            if (navigator.geolocation) {
-                // Ping every 30 seconds
-                setInterval(() => {
-                    // Restrict pinger to school hours: 8 AM to 4 PM
-                    const now = new Date();
-                    const hours = now.getHours();
-                    if (hours < 8 || hours >= 16) {
-                        console.log("Pinger is inactive outside school working hours (8 AM - 4 PM)");
-                        return;
-                    }
+document.getElementById('scheduleForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+        const d = await (await fetch('api_manage_schedule.php', {method:'POST', body:fd})).json();
+        closeModal();
+        if (d.status === 'SUCCESS') location.reload();
+        else alert(d.message || 'Failed to save.');
+    } catch(err) { alert('Error: ' + err.message); }
+});
 
-                    navigator.geolocation.getCurrentPosition((position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        // Add altitude if supported
-                        const altOffset = parseFloat(document.getElementById('altOffset').value) || 0;
-                        const alt = (position.coords.altitude !== null) ? (position.coords.altitude + altOffset) : (0.00 + altOffset);
-                        
-                        sendBackgroundLocationPing(lat, lon, alt);
-                    }, (err) => {
-                        // Fallback pinger if GPS blocked (mock tracking using base values)
-                        if (currentClass) {
-                            const offset = parseFloat(document.getElementById('altOffset').value) || 0;
-                            const mockLat = parseFloat(currentClass.latitude) + (Math.random() - 0.5) * 0.0001;
-                            const mockLon = parseFloat(currentClass.longitude) + (Math.random() - 0.5) * 0.0001;
-                            const mockAlt = parseFloat(currentClass.altitude_meters) + offset;
-                            sendBackgroundLocationPing(mockLat, mockLon, mockAlt);
-                        }
-                    }, { enableHighAccuracy: true, timeout: 3000 });
-                }, 30000);
-            }
-        }
-
-        async function sendBackgroundLocationPing(lat, lon, alt) {
-            const formData = new FormData();
-            formData.append('latitude', lat);
-            formData.append('longitude', lon);
-            formData.append('altitude', alt);
-            
-            try {
-                const response = await fetch('api_ping_location.php', { method: 'POST', body: formData });
-                const data = await response.json();
-                console.log("Background location ping sent:", {lat, lon, alt});
-                // If the response indicates shift has been auto-signed out, reload page
-                // (e.g. if the backend auto signs them out because they exited campus)
-                if (data.status === 'SUCCESS' && data.message === 'Location logged') {
-                    // We can check if status needs reload
-                }
-            } catch(e) {
-                console.warn("Location ping failed:", e);
-            }
-        }
-
-        // Initialize Map
-        function initMap(lat, lon, tolerance) {
-            if (map) {
-                map.remove();
-            }
-            map = L.map('map-container').setView([lat, lon], 17);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; OpenStreetMap'
-            }).addTo(map);
-
-            // Draw Geofence circle
-            hallCircle = L.circle([lat, lon], {
-                color: '#3a7bd5',
-                fillColor: '#3a7bd5',
-                fillOpacity: 0.15,
-                radius: tolerance
-            }).addTo(map);
-        }
-
-        // Action when a scheduled class is clicked
-        function selectClass(classObj) {
-            if (classObj.status === 'completed') {
-                alert('This class attendance has already been verified!');
-                return;
-            }
-            currentClass = classObj;
-            
-            document.getElementById('scheduleSection').style.display = 'none';
-            document.getElementById('checkinSection').style.display = 'block';
-            document.getElementById('formTitle').textContent = `Check-In: ${classObj.course_code}`;
-            document.getElementById('class_id').value = classObj.class_id;
-            document.getElementById('hall_name').value = classObj.hall_name;
-            
-            // Clear inputs
-            document.getElementById('latitude').value = '';
-            document.getElementById('longitude').value = '';
-            document.getElementById('altitude').value = '';
-            document.getElementById('accuracy').value = '';
-            document.getElementById('submitBtn').disabled = true;
-            document.getElementById('resultBox').style.display = 'none';
-            
-            rawLatitude = null;
-
-            // Wait until panel is visible before building leaflet map
-            setTimeout(() => {
-                initMap(parseFloat(classObj.latitude), parseFloat(classObj.longitude), parseInt(classObj.tolerance_radius_meters));
-            }, 100);
-        }
-
-        function closeCheckinForm() {
-            document.getElementById('checkinSection').style.display = 'none';
-            document.getElementById('scheduleSection').style.display = 'block';
-            currentClass = null;
-        }
-
-        // Get Location: HTML5 Geolocation with mock fallback
-        function retrieveLocation() {
-            if (!currentClass) return;
-
-            const btn = document.getElementById('getLocationBtn');
-            btn.disabled = true;
-            btn.textContent = 'Acquiring GPS Signal...';
-
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    function(position) {
-                        rawLatitude = position.coords.latitude;
-                        rawLongitude = position.coords.longitude;
-                        rawAccuracy = Math.round(position.coords.accuracy);
-                        
-                        // Grab actual altitude or fallback to target classroom base altitude
-                        rawAltitude = (position.coords.altitude !== null) ? position.coords.altitude : parseFloat(currentClass.altitude_meters);
-                        
-                        updateLocationFormFields(rawLatitude, rawLongitude, rawAltitude, rawAccuracy, false);
-                    },
-                    function(err) {
-                        console.warn('Real GPS failed, using coordinate simulator');
-                        simulateCampusGPS();
-                    },
-                    { enableHighAccuracy: true, timeout: 5000 }
-                );
-            } else {
-                simulateCampusGPS();
-            }
-        }
-
-        // Simulate location values centered on target lecture hall
-        function simulateCampusGPS() {
-            const baseLat = parseFloat(currentClass.latitude);
-            const baseLon = parseFloat(currentClass.longitude);
-            const baseAlt = parseFloat(currentClass.altitude_meters);
-            
-            // Simulate random variance to demo PASS / FAIL geofence
-            const inside = Math.random() > 0.3;
-            let varianceLat, varianceLon;
-            
-            if (inside) {
-                varianceLat = (Math.random() - 0.5) * 0.0001;
-                varianceLon = (Math.random() - 0.5) * 0.0001;
-            } else {
-                varianceLat = (Math.random() - 0.5) * 0.002;
-                varianceLon = (Math.random() - 0.5) * 0.002;
-            }
-
-            rawLatitude = baseLat + varianceLat;
-            rawLongitude = baseLon + varianceLon;
-            rawAltitude = baseAlt;
-            rawAccuracy = Math.round(5 + Math.random() * 10);
-
-            updateLocationFormFields(rawLatitude, rawLongitude, rawAltitude, rawAccuracy, true);
-        }
-
-        function updateLocationFormFields(lat, lon, alt, accuracy, isSimulated) {
-            // Apply simulation height offset slider to altitude
-            const offset = parseFloat(document.getElementById('altOffset').value) || 0;
-            const finalAlt = alt + offset;
-
-            document.getElementById('latitude').value = lat.toFixed(7);
-            document.getElementById('longitude').value = lon.toFixed(7);
-            document.getElementById('altitude').value = finalAlt.toFixed(2);
-            document.getElementById('accuracy').value = accuracy;
-
-            const btn = document.getElementById('getLocationBtn');
-            btn.disabled = false;
-            btn.textContent = isSimulated ? '🛰️ Location Obtained (Simulated)' : '🛰️ Location Obtained (Real GPS)';
-            
-            document.getElementById('submitBtn').disabled = false;
-
-            // Plot user on map
-            if (userMarker) {
-                userMarker.removeFrom(map);
-            }
-            
-            userMarker = L.marker([lat, lon]).addTo(map)
-                .bindPopup("Your Location Pinpoint").openPopup();
-                
-            const bounds = L.latLngBounds([
-                [lat, lon],
-                [parseFloat(currentClass.latitude), parseFloat(currentClass.longitude)]
-            ]);
-            map.fitBounds(bounds.pad(0.2));
-        }
-
-        // AJAX Form submit to api_submit_attendance.php
-        document.getElementById('attendanceForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            
-            document.getElementById('loaderOverlay').style.display = 'flex';
-            const formData = new FormData(this);
-
-            try {
-                const response = await fetch('api_submit_attendance.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                document.getElementById('loaderOverlay').style.display = 'none';
-
-                const rBox = document.getElementById('resultBox');
-                rBox.style.display = 'block';
-                
-                if (data.status === 'SUCCESS') {
-                    const verify = data.verification;
-                    let resultClass = 'error';
-                    let titleIcon = '❌';
-
-                    if (verify.status === 'VERIFIED') {
-                        resultClass = 'success';
-                        titleIcon = '✓';
-                        document.getElementById('submitBtn').disabled = true;
-                    } else if (verify.status === 'PENDING') {
-                        resultClass = 'warning';
-                        titleIcon = '🚨';
-                    }
-
-                    rBox.className = `result-box ${resultClass}`;
-                    rBox.innerHTML = `
-                        <strong>${titleIcon} Status: ${verify.status}</strong><br>
-                        • Geofence check: ${verify.spatial.passed ? '✓ PASS' : '✗ FAIL'}<br>
-                        <small style="color: #666; margin-left: 10px; display: inline-block;">${verify.spatial.message}</small><br>
-                        • Altitude / Height check: ${verify.altitude.passed ? '✓ PASS' : '✗ FAIL'}<br>
-                        <small style="color: #666; margin-left: 10px; display: inline-block;">${verify.altitude.message}</small><br>
-                        • Time Slot check: ${verify.temporal.passed ? '✓ PASS' : '✗ FAIL'}<br>
-                        <small style="color: #666; margin-left: 10px; display: inline-block;">${verify.temporal.message}</small><br>
-                        ${verify.anomaly.detected ? `• Anomaly: Yes (Blocked)<br><small style="color: red; margin-left: 10px;">${verify.anomaly.reason}</small><br>` : ''}
-                        <hr style="margin: 8px 0; border: none; border-top: 1px solid rgba(0,0,0,0.1);">
-                        <small>Transaction ID: #${data.submission_id}<br>Timestamp: ${data.timestamp}</small>
-                    `;
-
-                    // Reload page after a delay if verified successfully to update schedule list
-                    if (verify.status === 'VERIFIED') {
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 4000);
-                    }
-
-                } else {
-                    rBox.className = 'result-box error';
-                    rBox.innerHTML = `<strong>Error Logging Attendance</strong><br>${data.message}`;
-                }
-            } catch (err) {
-                document.getElementById('loaderOverlay').style.display = 'none';
-                alert('Network request failed: ' + err.message);
-            }
-        });
-        // Schedule modal management functions
-        function openCreateScheduleModal() {
-            document.getElementById('modalTitle').textContent = "Add Schedule Slot";
-            document.getElementById('sched_action').value = "create";
-            document.getElementById('sched_class_id').value = "";
-            document.getElementById('scheduleForm').reset();
-            document.getElementById('scheduleModal').style.display = 'flex';
-        }
-
-        function openEditScheduleModal(classObj) {
-            document.getElementById('modalTitle').textContent = "Edit Schedule Slot";
-            document.getElementById('sched_action').value = "edit";
-            document.getElementById('sched_class_id').value = classObj.class_id;
-            
-            document.getElementById('sched_course_code').value = classObj.course_code;
-            document.getElementById('sched_course_title').value = classObj.course_title;
-            document.getElementById('sched_hall_id').value = classObj.hall_id;
-            document.getElementById('sched_date').value = classObj.scheduled_date;
-            
-            // Format start and end time (from H:i:s to H:i)
-            document.getElementById('sched_start_time').value = classObj.scheduled_start_time.substring(0, 5);
-            document.getElementById('sched_end_time').value = classObj.scheduled_end_time.substring(0, 5);
-            
-            document.getElementById('scheduleModal').style.display = 'flex';
-        }
-
-        function closeScheduleModal() {
-            document.getElementById('scheduleModal').style.display = 'none';
-        }
-
-        async function deleteScheduleSlot(classId) {
-            if (!confirm("Are you sure you want to delete this schedule slot?")) return;
-            
-            const formData = new FormData();
-            formData.append('action', 'delete');
-            formData.append('class_id', classId);
-
-            try {
-                const response = await fetch('api_manage_schedule.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                alert(data.message);
-                if (data.status === 'SUCCESS') {
-                    window.location.reload();
-                }
-            } catch (err) {
-                alert('Request failed: ' + err.message);
-            }
-        }
-
-        // Form submit handler for schedule
-        document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-            const formData = new FormData(this);
-
-            try {
-                const response = await fetch('api_manage_schedule.php', {
-                    method: 'POST',
-                    body: formData
-                });
-                const data = await response.json();
-                alert(data.message);
-                if (data.status === 'SUCCESS') {
-                    window.location.reload();
-                }
-            } catch (err) {
-                alert('Request failed: ' + err.message);
-            }
-        });
-
-        syncShiftButtons();
-        setInterval(syncShiftButtons, 30000);
-    </script>
+/* ─── Live location pinger ────────────────────────────── */
+if (isShiftActive) {
+    setInterval(() => {
+        if (!navigator.geolocation) return;
+        navigator.geolocation.getCurrentPosition(pos => {
+            const fd = new FormData();
+            fd.append('latitude',  pos.coords.latitude);
+            fd.append('longitude', pos.coords.longitude);
+            fd.append('altitude',  pos.coords.altitude || 0);
+            fetch('api_ping_location.php', {method:'POST', body:fd}).catch(() => {});
+        }, () => {}, {enableHighAccuracy:false, timeout:8000});
+    }, 30000);
+}
+</script>
 </body>
 </html>
