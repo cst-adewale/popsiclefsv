@@ -26,6 +26,37 @@ if (preg_match('/^\\d{4}-W\\d{2}$/', $selected_week)) {
 }
 $week_end_date = date('Y-m-d', strtotime($week_start_date . ' +7 days'));
 
+function weekLabelFromWeekParam($weekParam) {
+    if (!preg_match('/^(\\d{4})-W(\\d{2})$/', $weekParam, $matches)) {
+        return $weekParam;
+    }
+
+    $year = $matches[1];
+    $week = $matches[2];
+    $start = new DateTime();
+    $start->setISODate((int)$year, (int)$week, 1);
+    $end = clone $start;
+    $end->modify('+4 days');
+    return 'W' . $week . ' (' . $start->format('M j') . ' - ' . $end->format('M j') . ')';
+}
+
+$week_navigation = [];
+$baseWeek = new DateTime($week_start_date);
+for ($i = -4; $i <= 4; $i++) {
+    $weekStart = clone $baseWeek;
+    if ($i !== 0) {
+        $weekStart->modify(($i > 0 ? '+' : '') . ($i * 7) . ' days');
+    }
+    $weekStart->modify('monday this week');
+    $weekKey = $weekStart->format('o-\WW');
+    $weekNavigationLabel = weekLabelFromWeekParam($weekKey);
+    $week_navigation[] = [
+        'key' => $weekKey,
+        'label' => $weekNavigationLabel,
+        'active' => $weekKey === $selected_week
+    ];
+}
+
 // Get classes scheduled for today using PostgreSQL PDO syntax
 $stmt = $conn->prepare("
     SELECT sc.class_id, sc.course_code, sc.course_title, sc.scheduled_start_time, sc.scheduled_end_time, 
@@ -746,14 +777,17 @@ $week_classes = $stmt_week->fetchAll();
                 <!-- Weekly Timetable Tab -->
                 <div id="weekScheduleTab" style="display: none;">
                     <div class="section-title">Weekly Monday - Friday Timetable</div>
-                    <div style="font-size:12px;color:#8B93A1;margin-bottom:10px">All saved weekday schedules are shown here, grouped by date.</div>
-                    <form method="GET" action="lecturer_app.php" style="display:flex;gap:10px;align-items:end;margin-bottom:12px">
-                        <div style="flex:1">
-                            <label for="weekPicker" style="display:block;font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Select Week</label>
-                            <input type="week" id="weekPicker" name="week" value="<?php echo htmlspecialchars($selected_week); ?>" style="width:100%;padding:10px 12px;border:1px solid #E5E8EE;border-radius:10px;font-family:'Outfit',sans-serif">
-                        </div>
-                        <button type="submit" class="btn btn-gps" style="padding:10px 14px;white-space:nowrap">Load Week</button>
-                    </form>
+                    <div style="font-size:12px;color:#8B93A1;margin-bottom:10px">Pick an ISO week number first, then review the timetable for that week.</div>
+                    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">
+                        <?php foreach ($week_navigation as $navWeek): ?>
+                            <a href="lecturer_app.php?week=<?php echo urlencode($navWeek['key']); ?>#weekScheduleTab" style="text-decoration:none;flex:0 0 auto;">
+                                <div style="padding:10px 12px;border:1px solid <?php echo $navWeek['active'] ? '#214F3B' : '#E5E8EE'; ?>;border-radius:12px;background:<?php echo $navWeek['active'] ? '#214F3B' : '#fff'; ?>;color:<?php echo $navWeek['active'] ? '#fff' : '#1A1A2E'; ?>;min-width:120px;text-align:center;box-shadow:0 4px 12px rgba(26,26,46,0.04)">
+                                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;opacity:.75">Week</div>
+                                    <div style="font-size:15px;font-weight:700"><?php echo htmlspecialchars($navWeek['label']); ?></div>
+                                </div>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
                     
                     <?php
                     $grouped_days = [];
