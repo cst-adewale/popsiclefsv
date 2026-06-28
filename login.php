@@ -60,25 +60,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <title>Sign in — Caleb FSV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Poppins',sans-serif;background:#000000;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#ffffff}
+body{font-family:'Outfit',sans-serif;background:#f8f9fa;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#1a1a2e}
 .login-wrap{width:100%;max-width:390px;padding:16px}
 .logo-row{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
-.logo-icon{width:40px;height:40px;background:#65FE08;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.logo-icon{width:40px;height:40px;background:#65FE08;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid #000000}
 .logo-icon svg{width:22px;height:22px;stroke:#000000}
-.logo-name{font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.2px}
-.logo-sub{font-size:11px;color:#666666;font-weight:400}
-.card{background:#111111;border:1px solid #222222;border-radius:18px;padding:32px 28px}
-.card-title{font-size:20px;font-weight:700;color:#ffffff;margin-bottom:4px}
-.card-sub{font-size:13px;color:#666666;margin-bottom:28px}
+.logo-name{font-size:18px;font-weight:700;color:#1a1a2e;letter-spacing:-0.2px}
+.logo-sub{font-size:11px;color:#8a95a3;font-weight:400}
+.card{background:#ffffff;border:1px solid #dde1e7;border-radius:18px;padding:32px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.05)}
+.card-title{font-size:20px;font-weight:700;color:#1a1a2e;margin-bottom:4px}
+.card-sub{font-size:13px;color:#8a95a3;margin-bottom:28px}
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .field label{font-size:11px;font-weight:600;color:#888888;text-transform:uppercase;letter-spacing:.4px}
-.field input{padding:11px 13px;border:1px solid #222222;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;color:#ffffff;background:#1a1a1a;outline:none;transition:all .15s}
-.field input:focus{border-color:#65FE08;box-shadow:0 0 0 3px rgba(101,254,8,0.12)}
-.field input::placeholder{color:#444444}
-.btn-submit{width:100%;padding:12px;background:#65FE08;color:#000000;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;transition:all .2s;margin-top:4px}
+.field input{padding:11px 13px;border:1px solid #dde1e7;border-radius:12px;font-size:14px;font-family:'Outfit',sans-serif;color:#1a1a2e;background:#ffffff;outline:none;transition:all .15s}
+.field input:focus{border-color:#65FE08;box-shadow:0 0 0 3px rgba(101,254,8,0.15)}
+.field input::placeholder{color:#b0b8c8}
+.btn-submit{width:100%;padding:12px;background:#65FE08;color:#000000;border:1px solid #000000;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;margin-top:4px}
 .btn-submit:hover{background:#4dd400}
 .error-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:11px 14px;font-size:13px;color:#f87171;margin-bottom:18px;display:flex;align-items:center;gap:8px}
 .error-box svg{flex-shrink:0;width:15px;height:15px}

@@ -96,7 +96,7 @@ $is_shift_active = $today_shift && $today_shift['sign_out_time'] === null;
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -335,9 +335,15 @@ if ('serviceWorker' in navigator) {
 
       <!-- Leaflet Map Card -->
       <div class="svg-map-card">
-        <div class="map-title">
-          Caleb University Campus — Live View
-          <span id="liveMapHint" style="font-size:10px;font-weight:500;color:var(--text-dim);margin-left:8px;">Locating you…</span>
+        <div class="map-title" style="display:flex; justify-content:space-between; align-items:center;">
+          <span>
+            Caleb University Campus — Live View
+            <span id="liveMapHint" style="font-size:10px;font-weight:500;color:var(--text-dim);margin-left:8px;">Locating you…</span>
+          </span>
+          <button onclick="recenterLiveMap()" class="btn-recenter" style="padding: 5px 10px; font-size: 11px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; color: var(--text-muted); font-family: var(--sans); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; transition: all .15s;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+            Recenter
+          </button>
         </div>
         <div id="live-map" style="width:100%;height:320px;border-radius:12px;border:1px solid var(--border);overflow:hidden;"></div>
       </div>
@@ -435,6 +441,7 @@ window.addEventListener('appinstalled', () => {
 
 /* ─── Live Leaflet Map ────────────────────────────────── */
 let liveMap = null, liveMarker = null;
+let lastCapturedLat = null, lastCapturedLon = null;
 
 function initLiveMap() {
     if (liveMap) return; // already initialised
@@ -452,6 +459,8 @@ function initLiveMap() {
 
 function updateLiveMap(lat, lon) {
     if (!liveMap) return;
+    lastCapturedLat = lat;
+    lastCapturedLon = lon;
     if (liveMarker) {
         liveMarker.setLatLng([lat, lon]);
     } else {
@@ -466,6 +475,16 @@ function updateLiveMap(lat, lon) {
     liveMap.setView([lat, lon], 17);
     const hint = document.getElementById('liveMapHint');
     if (hint) hint.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+function recenterLiveMap() {
+    if (!liveMap) return;
+    if (lastCapturedLat !== null && lastCapturedLon !== null) {
+        liveMap.setView([lastCapturedLat, lastCapturedLon], 17);
+    } else {
+        // Fallback to campus center if user position hasn't been fetched yet
+        liveMap.setView([6.6718, 3.4908], 17);
+    }
 }
 
 /* ─── Tab switching ───────────────────────────────────── */

@@ -30,8 +30,8 @@
     --success:        var(--lime);
     --warning:        var(--peach);
     
-    --sans:           'Poppins', sans-serif;
-    --mono:           'Poppins', sans-serif;
+    --sans:           'Outfit', sans-serif;
+    --mono:           'Outfit', sans-serif;
     --radius:         10px;
     --radius-lg:      16px;
 }
