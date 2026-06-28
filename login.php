@@ -1,6 +1,6 @@
 <?php
 /**
- * login.php - Redesigned login screen
+ * login.php - Flat, minimalistic login screen
  */
 require 'config.php';
 session_start();
@@ -60,33 +60,99 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <title>Sign in — Caleb FSV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+:root{
+  --bg:#FAFAF9;
+  --card:#FFFFFF;
+  --border:#E4E4E2;
+  --border-strong:#D6D6D3;
+  --text:#16161A;
+  --text-muted:#7A7A82;
+  --text-faint:#AFAFB2;
+  --accent:#1F7A4F;
+  --accent-hover:#19663F;
+  --accent-soft:#EAF7F0;
+  --error:#C22E48;
+  --error-soft:#FBEEEF;
+  --radius:8px;
+}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Poppins',sans-serif;background:linear-gradient(135deg,#F5F0FF 0%,#F8F9FA 60%,#FFF7F0 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#1A1A2E}
-.login-wrap{width:100%;max-width:390px;padding:16px}
-.logo-row{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
-.logo-icon{width:40px;height:40px;background:linear-gradient(135deg,#8B5CF6,#10B981);border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(139,92,246,0.3)}
-.logo-icon svg{width:22px;height:22px}
-.logo-name{font-size:18px;font-weight:700;color:#1A1A2E;letter-spacing:-0.2px}
-.logo-sub{font-size:11px;color:#8B93A1;font-weight:400}
-.card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:18px;padding:32px 28px;box-shadow:0 8px 32px rgba(139,92,246,0.08)}
-.card-title{font-size:20px;font-weight:700;color:#1A1A2E;margin-bottom:4px}
-.card-sub{font-size:13px;color:#8B93A1;margin-bottom:28px}
-.field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
-.field label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.4px}
-.field input{padding:11px 13px;border:1px solid #E5E8EE;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:all .15s}
-.field input:focus{border-color:#8B5CF6;box-shadow:0 0 0 3px rgba(139,92,246,0.1)}
-.field input::placeholder{color:#B0B8C8}
-.btn-submit{width:100%;padding:12px;background:linear-gradient(135deg,#8B5CF6,#7C3AED);color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;transition:all .2s;margin-top:4px;box-shadow:0 4px 14px rgba(139,92,246,0.3)}
-.btn-submit:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(139,92,246,0.35)}
-.error-box{background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:11px 14px;font-size:13px;color:#DC2626;margin-bottom:18px;display:flex;align-items:center;gap:8px}
-.error-box svg{flex-shrink:0;width:15px;height:15px}
-.divider{border:none;border-top:1px solid #F0F2F5;margin:20px 0}
-.register-link{text-align:center;font-size:13px;color:#8B93A1}
-.register-link a{color:#8B5CF6;font-weight:600;text-decoration:none}
+body{
+  font-family:'Inter',sans-serif;
+  background:var(--bg);
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--text);
+}
+.login-wrap{width:100%;max-width:380px;padding:16px}
+.logo-row{display:flex;align-items:center;gap:10px;margin-bottom:32px}
+.logo-icon{
+  width:32px;height:32px;
+  background:var(--accent);
+  border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.logo-icon svg{width:18px;height:18px}
+.logo-name{font-size:15px;font-weight:600;color:var(--text);letter-spacing:-0.1px}
+.logo-sub{font-size:11px;color:var(--text-faint);font-weight:400;margin-top:1px}
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:28px 26px;
+}
+.card-title{font-size:17px;font-weight:600;color:var(--text);margin-bottom:3px}
+.card-sub{font-size:13px;color:var(--text-muted);margin-bottom:24px}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{
+  font-size:11px;font-weight:500;color:var(--text-muted);
+  text-transform:uppercase;letter-spacing:.3px;
+}
+.field input{
+  padding:10px 12px;
+  border:1px solid var(--border-strong);
+  border-radius:6px;
+  font-size:14px;
+  font-family:'Inter',sans-serif;
+  color:var(--text);
+  background:var(--card);
+  outline:none;
+  transition:border-color .12s;
+}
+.field input:focus{border-color:var(--accent)}
+.field input::placeholder{color:var(--text-faint)}
+.btn-submit{
+  width:100%;padding:11px;
+  background:var(--accent);
+  color:#fff;
+  border:none;
+  border-radius:6px;
+  font-size:14px;font-weight:600;
+  cursor:pointer;
+  font-family:'Inter',sans-serif;
+  transition:background-color .12s;
+  margin-top:6px;
+}
+.btn-submit:hover{background:var(--accent-hover)}
+.error-box{
+  background:var(--error-soft);
+  border:1px solid var(--error);
+  border-radius:6px;
+  padding:10px 13px;
+  font-size:13px;color:var(--error);
+  margin-bottom:16px;
+  display:flex;align-items:center;gap:8px;
+}
+.error-box svg{flex-shrink:0;width:14px;height:14px}
+.divider{border:none;border-top:1px solid var(--border);margin:18px 0}
+.register-link{text-align:center;font-size:13px;color:var(--text-muted)}
+.register-link a{color:var(--accent);font-weight:600;text-decoration:none}
 .register-link a:hover{text-decoration:underline}
-.footer-note{text-align:center;font-size:11px;color:#B0B8C8;margin-top:18px}
+.footer-note{text-align:center;font-size:11px;color:var(--text-faint);margin-top:16px}
 </style>
 </head>
 <body>
