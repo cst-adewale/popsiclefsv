@@ -196,7 +196,7 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <!-- ── Tabs ────────────────────────────────────────── -->
-    <div class="tab-row">
+    <div class="tab-row" id="tabRowContainer">
       <button class="tab-btn active" id="tabToday" onclick="switchTab('today')">Today's Classes</button>
       <button class="tab-btn"        id="tabWeek"  onclick="switchTab('week')">Weekly Timetable</button>
     </div>
@@ -317,18 +317,141 @@ if ('serviceWorker' in navigator) {
       <button class="add-slot-btn" onclick="openModal()">
         + Add / manage schedule slots
       </button>
-
     </div><!-- /panelWeek -->
+
+    <!-- ════════════════════════════════════════════════ -->
+    <!--  PANEL C — LIVE STATUS & 2D SVG CAMPUS MAP      -->
+    <!-- ════════════════════════════════════════════════ -->
+    <div id="panelLive" class="d-none">
+      
+      <!-- Tracking flat banner -->
+      <div class="tracking-status-banner <?php echo $is_shift_active ? 'tracking-active' : 'tracking-inactive'; ?>" id="liveTrackingStatus">
+        <div class="banner-dot"></div>
+        <div class="banner-text">
+          <strong id="liveStatusText"><?php echo $is_shift_active ? 'Live Tracking Active' : 'Tracking Inactive'; ?></strong>
+          <span id="liveStatusSub"><?php echo $is_shift_active ? 'Admin is viewing your real-time campus coordinate updates.' : 'Sign in to start live location updates.'; ?></span>
+        </div>
+      </div>
+
+      <!-- SVG Map Card -->
+      <div class="svg-map-card">
+        <div class="map-title">Caleb University Campus Map (2D)</div>
+        <div class="svg-container">
+          <svg viewBox="0 0 400 400" class="svg-campus">
+            <!-- Grid lines / Background pattern -->
+            <rect width="400" height="400" fill="var(--bg-alt)" />
+            <path d="M0,50 L400,50 M0,100 L400,100 M0,150 L400,150 M0,200 L400,200 M0,250 L400,250 M0,300 L400,300 M0,350 L400,350" stroke="var(--border)" stroke-width="0.5" />
+            <path d="M50,0 L50,400 M100,0 L100,400 M150,0 L150,400 M200,0 L200,400 M250,0 L250,400 M300,0 L300,400 M350,0 L350,400" stroke="var(--border)" stroke-width="0.5" />
+
+            <!-- Outer boundary border -->
+            <rect x="5" y="5" width="390" height="390" fill="none" stroke="var(--border-light)" stroke-width="2" rx="12" />
+
+            <!-- Main road network -->
+            <!-- Main entrance road -->
+            <path d="M200,400 L200,310" class="map-road" />
+            <!-- Ring road / Loop -->
+            <path d="M200,310 C120,310 110,220 110,180 C110,120 150,110 200,110 C250,110 290,120 290,180 C290,220 280,310 200,310 Z" class="map-road" />
+            
+            <!-- Road Inner Lines for cleaner look -->
+            <path d="M200,400 L200,310" class="map-road-inner" />
+            <path d="M200,310 C120,310 110,220 110,180 C110,120 150,110 200,110 C250,110 290,120 290,180 C290,220 280,310 200,310 Z" class="map-road-inner" />
+
+            <!-- Landscapes / Love Garden -->
+            <circle cx="200" cy="180" r="22" class="map-garden" />
+            <text x="200" y="183" class="map-label garden" text-anchor="middle">Love Garden</text>
+
+            <!-- Campus Buildings -->
+            <!-- Administrative Block -->
+            <rect x="180" y="70" width="40" height="25" class="map-building admin" />
+            <text x="200" y="85" class="map-label" text-anchor="middle">Admin Block</text>
+
+            <!-- University Library -->
+            <rect x="235" y="70" width="35" height="25" class="map-building academic" />
+            <text x="252" y="85" class="map-label" text-anchor="middle">Library</text>
+
+            <!-- COLENSMA -->
+            <rect x="130" y="70" width="35" height="25" class="map-building academic" />
+            <text x="147" y="85" class="map-label" text-anchor="middle">COLENSMA</text>
+
+            <!-- COSMAS -->
+            <rect x="65" y="150" width="35" height="30" class="map-building academic" />
+            <text x="82" y="168" class="map-label" text-anchor="middle">COSMAS</text>
+
+            <!-- COPPS -->
+            <rect x="300" y="150" width="35" height="30" class="map-building academic" />
+            <text x="317" y="168" class="map-label" text-anchor="middle">COPPS</text>
+
+            <!-- Multipurpose Hall -->
+            <rect x="175" y="240" width="50" height="25" class="map-building academic" />
+            <text x="200" y="255" class="map-label" text-anchor="middle">MPH & Cafeteria</text>
+
+            <!-- School of PG Studies -->
+            <rect x="185" y="30" width="30" height="20" class="map-building admin" />
+            <text x="200" y="42" class="map-label" text-anchor="middle" style="font-size: 6px;">PG School</text>
+
+            <!-- Female Hostel -->
+            <rect x="50" y="250" width="40" height="35" class="map-building hostel" />
+            <text x="70" y="271" class="map-label" text-anchor="middle">F-Hostel</text>
+
+            <!-- Male Hostel -->
+            <rect x="310" y="250" width="40" height="35" class="map-building hostel" />
+            <text x="330" y="271" class="map-label" text-anchor="middle">M-Hostel</text>
+
+            <!-- Sports Complex / Pitch -->
+            <rect x="170" y="330" width="60" height="30" class="map-building sports" />
+            <text x="200" y="348" class="map-label" text-anchor="middle" style="fill: var(--lime);">Sports Pitch</text>
+
+            <!-- Main Entrance Gate / Security -->
+            <rect x="190" y="380" width="20" height="15" class="map-building admin" />
+            <text x="200" y="390" class="map-label" text-anchor="middle" style="font-size: 6px;">Security</text>
+
+            <!-- User pulsing location indicator -->
+            <circle id="svgUserPulse" cx="200" cy="200" r="14" fill="var(--lime)" opacity="0.3" style="display:none; transform-origin: center; animation: pulseLive 1.5s infinite;" />
+            <circle id="svgUserMarker" cx="200" cy="200" r="6" fill="#65FE08" stroke="#000000" stroke-width="2" style="display:none;" />
+          </svg>
+        </div>
+
+        <!-- Legend -->
+        <div class="map-legend">
+          <div class="legend-item">
+            <span class="legend-color" style="background: var(--lilac-dim); border-color: var(--lilac);"></span>
+            <span>Admin / Security</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: var(--peach-dim); border-color: var(--peach);"></span>
+            <span>Academic Buildings</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: var(--bg-card); border-color: var(--border-light);"></span>
+            <span>Hostels</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: rgba(16, 185, 129, 0.1); border-color: var(--lime); border-style: dashed;"></span>
+            <span>Recreation / Sports</span>
+          </div>
+          <div class="legend-item">
+            <span class="legend-color" style="background: #65FE08; border-color: #000;"></span>
+            <span>Your Position</span>
+          </div>
+        </div>
+
+        <!-- Off Campus Notice -->
+        <div id="offCampusNotice" class="off-campus-notice" style="display: none;">
+          📍 You are currently outside the campus map boundaries. Live tracking reports location, but icon only plots when on campus.
+        </div>
+      </div>
+
+    </div><!-- /panelLive -->
 
   </div><!-- /app-body -->
 
   <!-- ── Bottom nav ──────────────────────────────────────── -->
   <div class="bottom-nav">
-    <button class="nav-btn active" id="navSchedule" onclick="switchTab('today');setNav('navSchedule')">
+    <button class="nav-btn active" id="navSchedule" onclick="switchMainTab('schedule')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
       Schedule
     </button>
-    <button class="nav-btn" id="navLive" onclick="alert('Live tracking is active. Admin can see your position on the dashboard map.')">
+    <button class="nav-btn" id="navLive" onclick="switchMainTab('live')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/></svg>
       Live Status
     </button>
@@ -409,7 +532,76 @@ window.addEventListener('appinstalled', () => {
     document.getElementById('installBtn').classList.remove('show');
 });
 
-/* ─── Tabs ────────────────────────────────────────────── */
+/* ─── Tabs & 2D SVG Map Coordinates Mapping ────────────── */
+const MIN_LAT = 6.6668;
+const MAX_LAT = 6.6768;
+const MIN_LON = 3.4858;
+const MAX_LON = 3.4958;
+
+function updateSvgUserMarker(lat, lon) {
+    if (!lat || !lon) return;
+    if (lat < MIN_LAT || lat > MAX_LAT || lon < MIN_LON || lon > MAX_LON) {
+        // Off campus / out of map boundaries
+        const marker = document.getElementById('svgUserMarker');
+        const pulse = document.getElementById('svgUserPulse');
+        if (marker) marker.style.display = 'none';
+        if (pulse) pulse.style.display = 'none';
+        
+        const notice = document.getElementById('offCampusNotice');
+        if (notice) notice.style.display = 'block';
+        return;
+    }
+    
+    const notice = document.getElementById('offCampusNotice');
+    if (notice) notice.style.display = 'none';
+    
+    // Map GPS onto 400x400 SVG viewBox coordinates
+    const x = ((lon - MIN_LON) / (MAX_LON - MIN_LON)) * 400;
+    const y = 400 - ((lat - MIN_LAT) / (MAX_LAT - MIN_LAT)) * 400;
+    
+    const marker = document.getElementById('svgUserMarker');
+    const pulse = document.getElementById('svgUserPulse');
+    
+    if (marker) {
+        marker.setAttribute('cx', x);
+        marker.setAttribute('cy', y);
+        marker.style.display = 'block';
+    }
+    if (pulse) {
+        pulse.setAttribute('cx', x);
+        pulse.setAttribute('cy', y);
+        pulse.style.display = 'block';
+    }
+}
+
+function switchMainTab(t) {
+    if (t === 'schedule') {
+        const tr = document.getElementById('tabRowContainer');
+        if (tr) tr.style.display = 'flex';
+        
+        document.getElementById('panelLive').classList.add('d-none');
+        
+        const isTodayActive = document.getElementById('tabToday').classList.contains('active');
+        switchTab(isTodayActive ? 'today' : 'week');
+        setNav('navSchedule');
+    } else if (t === 'live') {
+        const tr = document.getElementById('tabRowContainer');
+        if (tr) tr.style.display = 'none';
+        
+        document.getElementById('panelToday').style.display = 'none';
+        document.getElementById('panelWeek').style.display = 'none';
+        document.getElementById('panelLive').classList.remove('d-none');
+        setNav('navLive');
+        
+        // Grab location immediately to plot on SVG map
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(pos => {
+                updateSvgUserMarker(pos.coords.latitude, pos.coords.longitude);
+            }, () => {}, {enableHighAccuracy: true, timeout: 5000});
+        }
+    }
+}
+
 function switchTab(t) {
     document.getElementById('panelToday').style.display = t === 'today' ? 'block' : 'none';
     document.getElementById('panelWeek').style.display  = t === 'week'  ? 'block' : 'none';
@@ -712,6 +904,9 @@ if (isShiftActive) {
             fd.append('longitude', pos.coords.longitude);
             fd.append('altitude',  pos.coords.altitude || 0);
             fetch('api_ping_location.php', {method:'POST', body:fd}).catch(() => {});
+            
+            // Render on 2D SVG map immediately
+            updateSvgUserMarker(pos.coords.latitude, pos.coords.longitude);
         }, () => {}, {enableHighAccuracy:false, timeout:8000});
     }, 30000);
 }

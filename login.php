@@ -63,30 +63,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Poppins',sans-serif;background:#F5F0FF;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#1A1A2E}
+body{font-family:'Poppins',sans-serif;background:#000000;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#ffffff}
 .login-wrap{width:100%;max-width:390px;padding:16px}
 .logo-row{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
-.logo-icon{width:40px;height:40px;background:#8B5CF6;border-radius:12px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(139,92,246,0.25)}
-.logo-icon svg{width:22px;height:22px}
-.logo-name{font-size:18px;font-weight:700;color:#1A1A2E;letter-spacing:-0.2px}
-.logo-sub{font-size:11px;color:#8B93A1;font-weight:400}
-.card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:18px;padding:32px 28px;box-shadow:0 8px 32px rgba(139,92,246,0.08)}
-.card-title{font-size:20px;font-weight:700;color:#1A1A2E;margin-bottom:4px}
-.card-sub{font-size:13px;color:#8B93A1;margin-bottom:28px}
+.logo-icon{width:40px;height:40px;background:#65FE08;border-radius:12px;display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:22px;height:22px;stroke:#000000}
+.logo-name{font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.2px}
+.logo-sub{font-size:11px;color:#666666;font-weight:400}
+.card{background:#111111;border:1px solid #222222;border-radius:18px;padding:32px 28px}
+.card-title{font-size:20px;font-weight:700;color:#ffffff;margin-bottom:4px}
+.card-sub{font-size:13px;color:#666666;margin-bottom:28px}
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
-.field label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.4px}
-.field input{padding:11px 13px;border:1px solid #E5E8EE;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:all .15s}
-.field input:focus{border-color:#8B5CF6;box-shadow:0 0 0 3px rgba(139,92,246,0.1)}
-.field input::placeholder{color:#B0B8C8}
-.btn-submit{width:100%;padding:12px;background:#8B5CF6;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;transition:all .2s;margin-top:4px}
-.btn-submit:hover{background:#7C3AED}
-.error-box{background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:11px 14px;font-size:13px;color:#DC2626;margin-bottom:18px;display:flex;align-items:center;gap:8px}
+.field label{font-size:11px;font-weight:600;color:#888888;text-transform:uppercase;letter-spacing:.4px}
+.field input{padding:11px 13px;border:1px solid #222222;border-radius:12px;font-size:14px;font-family:'Poppins',sans-serif;color:#ffffff;background:#1a1a1a;outline:none;transition:all .15s}
+.field input:focus{border-color:#65FE08;box-shadow:0 0 0 3px rgba(101,254,8,0.12)}
+.field input::placeholder{color:#444444}
+.btn-submit{width:100%;padding:12px;background:#65FE08;color:#000000;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Poppins',sans-serif;transition:all .2s;margin-top:4px}
+.btn-submit:hover{background:#4dd400}
+.error-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:11px 14px;font-size:13px;color:#f87171;margin-bottom:18px;display:flex;align-items:center;gap:8px}
 .error-box svg{flex-shrink:0;width:15px;height:15px}
-.divider{border:none;border-top:1px solid #F0F2F5;margin:20px 0}
-.register-link{text-align:center;font-size:13px;color:#8B93A1}
-.register-link a{color:#8B5CF6;font-weight:600;text-decoration:none}
+.divider{border:none;border-top:1px solid #1e1e1e;margin:20px 0}
+.register-link{text-align:center;font-size:13px;color:#666666}
+.register-link a{color:#65FE08;font-weight:600;text-decoration:none}
 .register-link a:hover{text-decoration:underline}
-.footer-note{text-align:center;font-size:11px;color:#B0B8C8;margin-top:18px}
+.footer-note{text-align:center;font-size:11px;color:#444444;margin-top:18px}
 </style>
 </head>
 <body>
