@@ -176,149 +176,7 @@ $unread_notification_count = $conn->query("SELECT COUNT(*) FROM system_notificat
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-<style>
-/* ── Reset & Base ─────────────────────────────────────── */
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Outfit',sans-serif;background:#F7F8FA;display:flex;min-height:100vh;color:#1A1A2E;font-size:14px}
-
-/* ── Sidebar ──────────────────────────────────────────── */
-.sidebar{width:220px;background:#FFFFFF;border-right:1px solid #E5E8EE;display:flex;flex-direction:column;flex-shrink:0;position:fixed;top:0;left:0;bottom:0;z-index:100}
-.logo-wrap{padding:18px 16px 16px;border-bottom:1px solid #F0F2F5}
-.logo{display:flex;align-items:center;gap:10px}
-.logo-icon{width:34px;height:34px;background:#214F3B;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.logo-icon svg{width:18px;height:18px}
-.logo-name{font-size:14px;font-weight:700;color:#1A1A2E;line-height:1.2}
-.logo-sub{font-size:10px;color:#8B93A1}
-nav{flex:1;padding:14px 10px;display:flex;flex-direction:column;gap:2px;overflow-y:auto}
-.nav-item{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#4B5263;transition:background .15s,color .15s;border:none;background:none;width:100%;text-align:left;font-family:'Inter',sans-serif}
-.nav-item:hover{background:#F7F8FA;color:#1A1A2E}
-.nav-item.active{background:#EBF5EF;color:#2D6A4F;font-weight:600}
-.nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.7}
-.nav-item.active svg{opacity:1}
-.nav-sep{height:1px;background:#F0F2F5;margin:8px 8px}
-.sidebar-footer{padding:12px 10px;border-top:1px solid #F0F2F5}
-.user-card{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;background:#F7F8FA;margin-bottom:8px}
-.avatar{width:30px;height:30px;border-radius:50%;background:#EBF5EF;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#2D6A4F;flex-shrink:0}
-.user-name{font-size:12px;font-weight:600;color:#1A1A2E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.user-role{font-size:10px;color:#8B93A1}
-.btn-logout{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px;border-radius:8px;background:none;border:1px solid #E5E8EE;cursor:pointer;font-size:12px;color:#4B5263;width:100%;font-family:'Inter',sans-serif;transition:background .15s}
-.btn-logout:hover{background:#FEF2F2;color:#DC2626;border-color:#FECACA}
-.btn-logout svg{width:13px;height:13px}
-
-/* ── Main ─────────────────────────────────────────────── */
-.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh}
-.topbar{background:#FFFFFF;border-bottom:1px solid #E5E8EE;padding:12px 22px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
-.page-title{font-size:16px;font-weight:700;color:#1A1A2E}
-.page-sub{font-size:12px;color:#8B93A1;margin-top:1px}
-.topbar-chips{display:flex;gap:8px;align-items:center}
-.chip{background:#F7F8FA;border:1px solid #E5E8EE;border-radius:20px;padding:5px 12px;font-size:11px;color:#4B5263;font-weight:500}
-.content{padding:20px 22px;flex:1}
-.panel{display:none;animation:fadeIn .2s ease}
-.panel.active{display:block}
-@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-
-/* ── Alerts ───────────────────────────────────────────── */
-.alert{padding:12px 16px;border-radius:8px;margin-bottom:20px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;border:1px solid}
-.alert-success{background:#EBF5EF;color:#2D6A4F;border-color:#86EFAC}
-.alert-danger{background:#FEF2F2;color:#DC2626;border-color:#FECACA}
-.alert svg{width:15px;height:15px;flex-shrink:0}
-
-/* ── Stat cards ───────────────────────────────────────── */
-.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-.stat-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:18px 18px 16px}
-.stat-label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.stat-label svg{width:13px;height:13px}
-.stat-val{font-size:30px;font-weight:700;color:#1A1A2E;line-height:1}
-.stat-val.green{color:#2D6A4F}
-.stat-val.red{color:#DC2626}
-.stat-val.amber{color:#B45309}
-
-/* ── Section header ───────────────────────────────────── */
-.section-head{font-size:13px;font-weight:700;color:#1A1A2E;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
-
-/* ── Card & table ─────────────────────────────────────── */
-.card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;overflow:hidden}
-.card-pad{padding:22px}
-table{width:100%;border-collapse:collapse}
-th{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.4px;padding:10px 16px;background:#F7F8FA;text-align:left;border-bottom:1px solid #E5E8EE}
-td{padding:11px 16px;font-size:12px;color:#4B5263;border-bottom:1px solid #F0F2F5}
-tr:last-child td{border-bottom:none}
-tr:hover td{background:#F7F8FA}
-td strong{color:#1A1A2E;font-weight:600}
-code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-family:monospace}
-
-/* ── Badges ───────────────────────────────────────────── */
-.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.2px}
-.badge-verified{background:#EBF5EF;color:#2D6A4F}
-.badge-out_of_range{background:#FEF2F2;color:#DC2626}
-.badge-invalid_altitude{background:#EFF6FF;color:#1D4ED8}
-.badge-invalid_time{background:#FFFBEB;color:#B45309}
-.badge-pending{background:#F5F3FF;color:#6D28D9}
-.badge-anomaly{background:#FEF2F2;color:#DC2626;border:1px solid #FECACA}
-.clear{color:#2D6A4F;font-size:11px;font-weight:600}
-
-/* ── Forms ────────────────────────────────────────────── */
-.form-layout{display:grid;grid-template-columns:1fr 1fr;gap:28px}
-@media(max-width:900px){.form-layout{grid-template-columns:1fr}}
-.form-col{display:flex;flex-direction:column;gap:14px}
-.field{display:flex;flex-direction:column;gap:5px}
-.field label{font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px}
-.field input,.field select,.field textarea{padding:9px 12px;border:1px solid #E5E8EE;border-radius:10px;font-size:13px;font-family:'Outfit',sans-serif;color:#1A1A2E;background:#FFFFFF;outline:none;transition:border-color .15s}
-.field input:focus,.field select:focus,.field textarea:focus{border-color:#52A878}
-.field input[readonly]{background:#F7F8FA;color:#4B5263;cursor:default}
-.field textarea{resize:none;height:80px}
-.field small{font-size:10px;color:#8B93A1;margin-top:2px}
-.two-col-field{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.btn-green{padding:10px 18px;background:#214F3B;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Outfit',sans-serif;display:inline-flex;align-items:center;gap:7px;transition:background .15s}
-.btn-green:hover{background:#3B7A57}
-.btn-green svg{width:14px;height:14px}
-.btn-outline{padding:7px 14px;background:#FFFFFF;border:1px solid #E5E8EE;border-radius:10px;font-size:12px;font-weight:500;cursor:pointer;color:#4B5263;font-family:'Outfit',sans-serif;transition:background .15s}
-.btn-outline:hover{background:#F7F8FA}
-
-/* ── Map ──────────────────────────────────────────────── */
-#picker-map,#tracker-map{width:100%;height:400px;border-radius:10px;border:1px solid #E5E8EE;margin-bottom:8px}
-.map-hint{font-size:11px;color:#8B93A1;font-style:italic;margin-top:4px}
-
-/* ── Lecturers panel ──────────────────────────────────── */
-.lec-layout{display:grid;grid-template-columns:260px 1fr;gap:16px;min-height:600px}
-.lec-list{background:#F7F8FA;border-radius:10px;padding:12px;overflow-y:auto;max-height:680px;display:flex;flex-direction:column;gap:5px}
-.lec-list-label{font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.4px;padding:0 4px;margin-bottom:6px}
-.lec-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .15s}
-.lec-item:hover{background:#FFFFFF;border-color:#E5E8EE}
-.lec-item.selected{background:#EBF5EF;border-color:#86EFAC}
-.lec-item.selected .lec-item-name{color:#2D6A4F}
-.lec-avatar{width:34px;height:34px;border-radius:50%;background:#E5E8EE;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#2D6A4F;flex-shrink:0;overflow:hidden}
-.lec-avatar img{width:100%;height:100%;object-fit:cover}
-.lec-item-name{font-size:12px;font-weight:600;color:#1A1A2E}
-.lec-item-dept{font-size:11px;color:#8B93A1}
-.detail-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:22px;display:flex;flex-direction:column;gap:16px}
-.detail-header{background:linear-gradient(135deg,#2D6A4F,#52A878);border-radius:10px;padding:20px;color:#fff;display:flex;align-items:center;gap:16px}
-.detail-header-avatar{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
-.detail-header-avatar img{width:100%;height:100%;object-fit:cover}
-.detail-name{font-size:18px;font-weight:700}
-.detail-meta{font-size:12px;opacity:.85;margin-top:2px}
-.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.info-box{background:#F7F8FA;border-radius:8px;padding:12px}
-.info-box-label{font-size:10px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px}
-.info-box-val{font-size:13px;color:#1A1A2E;font-weight:500}
-.shift-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.shift-row-title{font-size:12px;font-weight:700;color:#1A1A2E}
-.date-input{padding:5px 10px;border:1px solid #E5E8EE;border-radius:8px;font-size:12px;font-family:'Outfit',sans-serif;color:#1A1A2E;outline:none}
-.date-input:focus{border-color:#52A878}
-.shift-info{font-size:12px;color:#4B5263;line-height:1.6}
-.sched-table{width:100%;border-collapse:collapse;font-size:12px}
-.sched-table th{font-size:10px;font-weight:600;text-transform:uppercase;color:#8B93A1;padding:7px 10px;background:#F7F8FA;letter-spacing:.3px;border-bottom:1px solid #E5E8EE;text-align:left}
-.sched-table td{padding:8px 10px;border-bottom:1px solid #F0F2F5;color:#4B5263}
-.sched-table tr:last-child td{border-bottom:none}
-.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:320px;gap:10px;color:#8B93A1;text-align:center}
-.empty-state svg{width:36px;height:36px;opacity:.25}
-.empty-state p{font-size:13px}
-#lecturerMovementMap{width:100%;height:300px;border-radius:8px;border:1px solid #E5E8EE}
-
-/* ── Tracker ──────────────────────────────────────────── */
-.tracker-grid{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
-.active-badge{background:#EBF5EF;color:#2D6A4F;border-color:#86EFAC}
-</style>
+<link rel="stylesheet" href="css/admin_dashboard.css">
 </head>
 <body>
 
@@ -440,13 +298,13 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
 
       <div class="section-head">
         Recent attendance check-ins
-        <a class="btn-outline" href="admin_dashboard.php?export=attendance_csv" style="text-decoration:none;display:inline-flex;align-items:center">Export CSV</a>
+        <a class="btn-outline btn-export-link" href="admin_dashboard.php?export=attendance_csv">Export CSV</a>
       </div>
       <div class="card">
         <?php if (count($attendance_logs) === 0): ?>
-        <div style="padding:48px;text-align:center;color:#8B93A1;font-size:13px">No attendance submissions yet today.</div>
+        <div class="empty-attendance-msg">No attendance submissions yet today.</div>
         <?php else: ?>
-        <div style="overflow-x:auto">
+        <div class="table-overflow-x">
         <table>
           <thead>
             <tr>
@@ -474,7 +332,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
                   <span class="clear">✓ Clear</span>
                 <?php endif; ?>
               </td>
-              <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="<?php echo htmlspecialchars($log['submission_description']); ?>">
+              <td class="cell-ellipsis" title="<?php echo htmlspecialchars($log['submission_description']); ?>">
                 <?php echo htmlspecialchars($log['submission_description']); ?>
               </td>
             </tr>
@@ -494,29 +352,29 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
           <p class="map-hint">Lecturer positions refresh automatically every 10 seconds. Only staff signed in within the last 10 minutes appear.</p>
         </div>
         <div>
-          <div class="section-head" style="margin-bottom:10px">Active right now</div>
+          <div class="section-head mb-10">Active right now</div>
           <div class="card" id="liveList">
-            <div style="padding:20px;text-align:center;color:#8B93A1;font-size:12px">Loading…</div>
+            <div class="loading-msg">Loading…</div>
           </div>
         </div>
       </div>
 
-      <div class="section-head" style="margin-top:20px">
+      <div class="section-head mt-20">
         Recent notifications
-        <a class="btn-outline" href="admin_dashboard.php?export=lecturers_csv" style="text-decoration:none;display:inline-flex;align-items:center">Export Lecturers</a>
+        <a class="btn-outline btn-export-link" href="admin_dashboard.php?export=lecturers_csv">Export Lecturers</a>
       </div>
       <div class="card">
         <?php if (count($recent_notifications) === 0): ?>
-          <div style="padding:32px;text-align:center;color:#8B93A1;font-size:13px">No notifications yet.</div>
+          <div class="empty-notifications-msg">No notifications yet.</div>
         <?php else: ?>
-          <div style="display:grid;gap:10px;padding:16px">
+          <div class="notifications-grid">
             <?php foreach ($recent_notifications as $note): ?>
-              <div style="padding:12px 14px;border:1px solid #E5E8EE;border-radius:10px;background:<?php echo $note['is_read'] ? '#fff' : '#F7F8FA'; ?>">
-                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:4px">
-                  <strong style="font-size:13px"><?php echo htmlspecialchars($note['title']); ?></strong>
-                  <span style="font-size:11px;color:#8B93A1"><?php echo date('H:i, d M', strtotime($note['created_at'])); ?></span>
+              <div class="notification-card <?php echo $note['is_read'] ? 'read' : 'unread'; ?>">
+                <div class="notification-hdr">
+                  <strong class="notification-title"><?php echo htmlspecialchars($note['title']); ?></strong>
+                  <span class="notification-time"><?php echo date('H:i, d M', strtotime($note['created_at'])); ?></span>
                 </div>
-                <div style="font-size:12px;color:#4B5263;line-height:1.5"><?php echo htmlspecialchars($note['message']); ?></div>
+                <div class="notification-msg"><?php echo htmlspecialchars($note['message']); ?></div>
               </div>
             <?php endforeach; ?>
           </div>
@@ -531,7 +389,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
         <div class="lec-list">
           <div class="lec-list-label">All registered lecturers</div>
           <?php if (count($all_lecturers) === 0): ?>
-          <p style="font-size:12px;color:#8B93A1;padding:8px 4px">No lecturers registered yet.</p>
+          <p class="empty-lecturers-msg">No lecturers registered yet.</p>
           <?php else: ?>
           <?php foreach ($all_lecturers as $lec): ?>
           <div class="lec-item" onclick="loadLecturerDetails(<?php echo $lec['user_id']; ?>)" id="lec-item-<?php echo $lec['user_id']; ?>">
@@ -552,19 +410,19 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
         </div>
 
         <!-- Right: detail -->
-        <div id="lecturerDetailPanel" style="display:none">
+        <div id="lecturerDetailPanel" class="d-none">
           <div class="detail-card">
             <!-- Profile header -->
             <div class="detail-header">
               <div class="detail-header-avatar">
-                <img id="ldProfilePic" src="" alt="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%">
+                <img id="ldProfilePic" src="" alt="" class="img-profile-pic">
                 <span id="ldInitialAvatar">?</span>
               </div>
               <div>
                 <div class="detail-name" id="ldFullName"></div>
                 <div class="detail-meta" id="ldFaculty"></div>
                 <div class="detail-meta" id="ldDept"></div>
-                <div class="detail-meta" style="opacity:.7;font-size:11px;margin-top:3px" id="ldLecNum"></div>
+                <div class="detail-meta ld-lec-num" id="ldLecNum"></div>
               </div>
             </div>
 
@@ -575,7 +433,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
             </div>
 
             <!-- Shift -->
-            <div class="card-pad" style="background:#F7F8FA;border-radius:8px;padding:14px">
+            <div class="card-pad card-pad-bg">
               <div class="shift-row">
                 <div class="shift-row-title">Daily shift log</div>
                 <input type="date" id="ldDatePicker" class="date-input" value="<?php echo date('Y-m-d'); ?>" onchange="reloadLecturerDate()">
@@ -585,21 +443,21 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
 
             <!-- Timetable -->
             <div>
-              <div class="section-head" style="font-size:12px;margin-bottom:8px">Timetable</div>
-              <div style="overflow-y:auto;max-height:180px;border:1px solid #E5E8EE;border-radius:8px">
+              <div class="section-head sec-head-sm">Timetable</div>
+              <div class="timetable-scroll">
                 <table class="sched-table">
                   <thead><tr><th>Date</th><th>Course</th><th>Time</th><th>Venue</th></tr></thead>
-                  <tbody id="ldScheduleBody"><tr><td colspan="4" style="text-align:center;color:#8B93A1;padding:20px">Select a lecturer</td></tr></tbody>
+                  <tbody id="ldScheduleBody"><tr><td colspan="4" class="text-center-muted-p20">Select a lecturer</td></tr></tbody>
                 </table>
               </div>
             </div>
 
             <!-- Movement map -->
             <div>
-              <div class="section-head" style="font-size:12px;margin-bottom:6px">Movement map</div>
-              <p style="font-size:11px;color:#8B93A1;margin-bottom:8px">Dots and lines show the lecturer's recorded path for the selected date.</p>
+              <div class="section-head sec-head-mb6">Movement map</div>
+              <p class="movement-desc">Dots and lines show the lecturer's recorded path for the selected date.</p>
               <div id="lecturerMovementMap"></div>
-              <div id="ldMovementCount" style="font-size:11px;color:#8B93A1;margin-top:6px"></div>
+              <div id="ldMovementCount" class="movement-count"></div>
             </div>
           </div>
         </div>
@@ -647,7 +505,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
           </div>
         </form>
         <div>
-          <div style="font-size:11px;font-weight:600;color:#8B93A1;text-transform:uppercase;letter-spacing:.3px;margin-bottom:8px">Click map to pin location</div>
+          <div class="pin-loc-hdr">Click map to pin location</div>
           <div id="picker-map"></div>
           <p class="map-hint">Drag or zoom to the campus, then click to drop a pin. Coordinates auto-fill in the form.</p>
         </div>
@@ -656,9 +514,9 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
 
     <!-- ── SCHEDULE CLASS ─────────────────────────────────── -->
     <div id="schedule-panel" class="panel">
-      <div style="max-width:540px">
+      <div class="max-w-540">
         <div class="card card-pad">
-          <form action="admin_dashboard.php" method="POST" style="display:flex;flex-direction:column;gap:14px">
+          <form action="admin_dashboard.php" method="POST" class="form-flex-col">
             <input type="hidden" name="schedule_class" value="1">
             <div class="field">
               <label>Lecturer *</label>
@@ -685,7 +543,7 @@ code{font-size:11px;background:#F0F2F5;padding:2px 7px;border-radius:5px;font-fa
               <div class="field"><label>End time *</label><input type="time" name="end_time" required></div>
             </div>
             <div class="field"><label>Date *</label><input type="date" name="scheduled_date" value="<?php echo date('Y-m-d'); ?>" required></div>
-            <div style="padding-top:6px">
+            <div class="pt-6">
               <button type="submit" class="btn-green">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg>
                 Schedule class
@@ -759,9 +617,9 @@ async function fetchLivePings() {
     if (list.length) trackerMap.fitBounds(new L.featureGroup(list).getBounds().pad(0.2));
     // Update sidebar list
     const liveList = document.getElementById('liveList');
-    if (data.length === 0) { liveList.innerHTML = '<div style="padding:20px;text-align:center;color:#8B93A1;font-size:12px">No active lecturers right now.</div>'; return; }
+    if (data.length === 0) { liveList.innerHTML = '<div class="loading-msg">No active lecturers right now.</div>'; return; }
     liveList.innerHTML = '<table><thead><tr><th>Name</th><th>Dept</th><th>Last ping</th></tr></thead><tbody>' +
-      data.map(p => `<tr><td><strong>${p.full_name}</strong></td><td>${p.department}</td><td style="color:#2D6A4F;font-weight:500">${new Date(p.last_updated).toLocaleTimeString()}</td></tr>`).join('') +
+      data.map(p => `<tr><td><strong>${p.full_name}</strong></td><td>${p.department}</td><td class="cell-active-time">${new Date(p.last_updated).toLocaleTimeString()}</td></tr>`).join('') +
       '</tbody></table>';
   } catch(e) { console.error(e); }
 }
@@ -776,7 +634,7 @@ async function loadLecturerDetails(lecId) {
   const date = document.getElementById('ldDatePicker').value;
   document.getElementById('lecturerDetailPanel').style.display = 'block';
   document.getElementById('lecturerDetailEmpty').style.display  = 'none';
-  document.getElementById('ldScheduleBody').innerHTML = '<tr><td colspan="4" style="text-align:center;color:#8B93A1;padding:16px">Loading…</td></tr>';
+  document.getElementById('ldScheduleBody').innerHTML = '<tr><td colspan="4" class="text-center-muted-p16">Loading…</td></tr>';
   document.getElementById('ldShiftInfo').textContent = 'Loading…';
   try {
     const data = await (await fetch(`admin_dashboard.php?get_lecturer_details=${lecId}&date=${date}`)).json();
@@ -806,7 +664,7 @@ async function loadLecturerDetails(lecId) {
     // Schedule
     const rows = data.schedule.length
       ? data.schedule.map(c => `<tr><td>${c.scheduled_date}</td><td><strong>${c.course_code}</strong> — ${c.course_title}</td><td>${c.scheduled_start_time}–${c.scheduled_end_time}</td><td>${c.hall_name}</td></tr>`).join('')
-      : '<tr><td colspan="4" style="text-align:center;color:#8B93A1;padding:14px">No scheduled classes found.</td></tr>';
+      : '<tr><td colspan="4" class="text-center-muted-p14">No scheduled classes found.</td></tr>';
     document.getElementById('ldScheduleBody').innerHTML = rows;
     // Movement map
     if (!movementMap) {

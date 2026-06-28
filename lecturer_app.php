@@ -106,186 +106,7 @@ if ('serviceWorker' in navigator) {
     });
 }
 </script>
-<style>
-/* ── Reset ─────────────────────────────────────────────── */
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:flex;justify-content:center;align-items:flex-start;color:#1A1A2E}
-
-/* ── Phone frame ──────────────────────────────────────── */
-.frame{background:#F7F8FA;width:100%;max-width:430px;min-height:100vh;display:flex;flex-direction:column;position:relative}
-@media(min-width:480px){
-    body{align-items:center;padding:20px 0}
-    .frame{min-height:auto;height:88vh;border-radius:28px;box-shadow:0 20px 60px rgba(0,0,0,.12);border:1px solid #E5E8EE;overflow:hidden}
-}
-
-/* ── Header ───────────────────────────────────────────── */
-.app-header{background:#FFFFFF;border-bottom:1px solid #E5E8EE;padding:16px 18px 14px;flex-shrink:0}
-.hdr-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.logo-row{display:flex;align-items:center;gap:8px}
-.logo-dot{width:28px;height:28px;background:#2D6A4F;border-radius:7px;display:flex;align-items:center;justify-content:center}
-.logo-dot svg{width:15px;height:15px}
-.app-name{font-size:13px;font-weight:700;color:#1A1A2E}
-.hdr-actions{display:flex;align-items:center;gap:8px}
-/* Install button — hidden until PWA prompt fires */
-.install-btn{display:none;align-items:center;gap:5px;padding:6px 11px;background:#EBF5EF;border:1px solid #86EFAC;border-radius:20px;font-size:11px;font-weight:600;color:#2D6A4F;cursor:pointer;font-family:'Inter',sans-serif;transition:background .15s}
-.install-btn:hover{background:#D1FAE5}
-.install-btn svg{width:13px;height:13px}
-.install-btn.show{display:flex}
-.logout-link{font-size:11px;font-weight:600;color:#8B93A1;text-decoration:none;padding:5px 10px;border:1px solid #E5E8EE;border-radius:20px}
-.welcome-lbl{font-size:11px;color:#8B93A1}
-.welcome-name{font-size:15px;font-weight:700;color:#1A1A2E}
-.date-chip{display:inline-flex;align-items:center;gap:5px;background:#F7F8FA;border:1px solid #E5E8EE;border-radius:20px;padding:4px 10px;font-size:11px;color:#4B5263;margin-top:6px}
-.date-chip svg{width:11px;height:11px;opacity:.6}
-
-/* ── Body ────────────────────────────────────────────── */
-.app-body{flex:1;overflow-y:auto;padding:14px 16px 80px}
-
-/* ── Shift card ──────────────────────────────────────── */
-.shift-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:14px;margin-bottom:14px}
-.shift-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
-.shift-title{font-size:12px;font-weight:700;color:#1A1A2E;display:flex;align-items:center;gap:6px}
-.shift-title svg{width:14px;height:14px}
-.status-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700}
-.pill-active{background:#EBF5EF;color:#2D6A4F}
-.pill-out{background:#F0F2F5;color:#8B93A1}
-.pill-none{background:#FEF2F2;color:#DC2626}
-.dot-live{width:6px;height:6px;border-radius:50%;background:#2D6A4F;display:inline-block;animation:blink 1.5s ease infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.shift-info{font-size:12px;color:#4B5263;line-height:1.5;margin-bottom:10px}
-.re-signin-note{font-size:11px;color:#2D6A4F;font-style:italic;margin-top:3px}
-.shift-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.btn-shift{padding:10px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:5px;transition:opacity .15s}
-.btn-shift svg{width:13px;height:13px}
-.btn-in{background:#2D6A4F;color:#fff}
-.btn-in:hover:not(:disabled){background:#3B7A57}
-.btn-out{background:#FEE2E2;color:#DC2626}
-.btn-out:hover:not(:disabled){background:#FECACA}
-.btn-shift:disabled{background:#F0F2F5;color:#B0B8C8;cursor:not-allowed}
-
-/* ── Tabs ────────────────────────────────────────────── */
-.tab-row{display:flex;background:#F0F2F5;border-radius:9px;padding:3px;gap:2px;margin-bottom:14px}
-.tab-btn{flex:1;padding:7px;background:none;border:none;border-radius:7px;font-size:12px;font-weight:500;color:#4B5263;cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif}
-.tab-btn.active{background:#FFFFFF;color:#1A1A2E;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.07)}
-
-/* ── Section label ───────────────────────────────────── */
-.sec-lbl{font-size:11px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.4px;margin-bottom:10px}
-
-/* ── Class cards ─────────────────────────────────────── */
-.class-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:13px;margin-bottom:9px;cursor:pointer;border-left:3px solid #2D6A4F;transition:box-shadow .15s}
-.class-card:hover{box-shadow:0 3px 12px rgba(0,0,0,.07)}
-.class-card.completed{border-left-color:#D1FAE5;opacity:.75}
-.cc-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px}
-.cc-code{font-size:14px;font-weight:700;color:#1A1A2E}
-.cc-title{font-size:12px;color:#8B93A1;margin-bottom:9px}
-.cc-meta{display:flex;gap:14px;font-size:11px;color:#4B5263}
-.cc-meta span{display:flex;align-items:center;gap:4px}
-.cc-meta svg{width:11px;height:11px;opacity:.6}
-.badge{display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
-.b-sched{background:#FFFBEB;color:#B45309}
-.b-done{background:#EBF5EF;color:#2D6A4F}
-.empty-day{text-align:center;padding:40px 20px;background:#FFFFFF;border-radius:12px;border:1px solid #E5E8EE}
-.empty-day p{font-size:13px;color:#8B93A1;margin-top:8px}
-
-/* ── CALENDAR ─────────────────────────────────────────── */
-.cal-wrap{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;overflow:hidden;margin-bottom:14px}
-.cal-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid #F0F2F5}
-.cal-month-lbl{font-size:13px;font-weight:700;color:#1A1A2E}
-.cal-nav{width:28px;height:28px;border:1px solid #E5E8EE;border-radius:7px;background:#FFFFFF;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.cal-nav:hover{background:#F7F8FA}
-.cal-nav svg{width:14px;height:14px;color:#4B5263}
-.cal-body{padding:8px 10px 12px}
-/* DOW header */
-.cal-dow-row{display:flex;margin-bottom:4px;padding-left:32px}
-.cal-dow-cell{flex:1;font-size:10px;font-weight:600;color:#8B93A1;text-align:center;padding:3px 0}
-/* Week rows */
-.cal-week-row{display:flex;align-items:center;margin-bottom:3px;border-radius:8px;cursor:pointer;padding:1px 0;transition:background .12s}
-.cal-week-row:hover{background:#F7F8FA}
-.cal-week-row.sel{background:#EBF5EF}
-/* Week number badge */
-.wn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:10px;font-weight:700;color:#8B93A1;flex-shrink:0;margin-right:2px}
-.cal-week-row.sel .wn{background:#2D6A4F;color:#FFFFFF}
-/* Day cells */
-.cal-day{flex:1;height:30px;display:flex;align-items:center;justify-content:center;border-radius:7px;font-size:12px;color:#4B5263;position:relative}
-.cal-day.today{font-weight:700;color:#2D6A4F}
-.cal-day.today::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:4px;height:4px;background:#2D6A4F;border-radius:50%}
-.cal-day.other{color:#D1D5DB}
-.cal-day.has-cls::before{content:'';position:absolute;top:2px;right:3px;width:4px;height:4px;background:#52A878;border-radius:50%}
-
-/* ── Weekly timetable ────────────────────────────────── */
-.wt-wrap{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;overflow:hidden;margin-bottom:14px}
-.wt-title{padding:12px 14px;border-bottom:1px solid #F0F2F5;font-size:12px;font-weight:700;color:#1A1A2E}
-.wt-empty{padding:20px 14px;font-size:12px;color:#8B93A1;text-align:center}
-.wt-day-lbl{background:#F7F8FA;padding:6px 14px;font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.4px;border-bottom:1px solid #F0F2F5}
-.wt-row{display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #F0F2F5;gap:12px}
-.wt-row:last-child{border-bottom:none}
-.wt-time{font-size:11px;font-weight:700;color:#2D6A4F;min-width:88px}
-.wt-course{font-size:12px;font-weight:600;color:#1A1A2E}
-.wt-hall{font-size:11px;color:#8B93A1;margin-top:1px}
-.wt-none{padding:9px 14px;font-size:11px;color:#B0B8C8;font-style:italic;border-bottom:1px solid #F0F2F5}
-.wt-none:last-child{border-bottom:none}
-
-/* ── Check-in form ───────────────────────────────────── */
-.ci-wrap{display:none}
-.ci-wrap.show{display:block;animation:fadeUp .22s ease}
-@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-.ci-card{background:#FFFFFF;border:1px solid #E5E8EE;border-radius:12px;padding:16px}
-.ci-title{font-size:14px;font-weight:700;color:#1A1A2E;margin-bottom:14px;display:flex;align-items:center;gap:6px}
-.ci-title svg{width:15px;height:15px;color:#2D6A4F}
-.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
-.field label{font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.3px}
-.field input,.field textarea{padding:9px 11px;border:1px solid #E5E8EE;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;color:#1A1A2E;background:#F7F8FA}
-.field input:focus,.field textarea:focus{outline:none;border-color:#52A878;background:#FFFFFF}
-.field textarea{resize:none;height:70px}
-.two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-#map-container{width:100%;height:140px;border-radius:9px;border:1px solid #E5E8EE;margin-bottom:12px}
-.btn-gps{width:100%;padding:11px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;display:flex;align-items:center;justify-content:center;gap:7px;margin-bottom:8px;transition:background .15s}
-.btn-gps:hover{background:#3B7A57}
-.btn-gps svg{width:14px;height:14px}
-.btn-sub{width:100%;padding:11px;background:#52A878;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;margin-bottom:8px;transition:background .15s}
-.btn-sub:hover{background:#2D6A4F}
-.btn-sub:disabled{background:#E5E8EE;color:#B0B8C8;cursor:not-allowed}
-.btn-back{width:100%;padding:9px;background:none;border:1px solid #E5E8EE;border-radius:8px;font-size:12px;color:#4B5263;cursor:pointer;font-family:'Inter',sans-serif}
-.result-box{padding:12px;border-radius:8px;font-size:12px;line-height:1.5;border-left:3px solid;display:none}
-.result-box.success{background:#EBF5EF;border-color:#2D6A4F;color:#2D6A4F;display:block}
-.result-box.error{background:#FEF2F2;border-color:#DC2626;color:#DC2626;display:block}
-.result-box.warning{background:#FFFBEB;border-color:#B45309;color:#B45309;display:block}
-.alt-sim{background:#F0F7F4;border:1px solid #86EFAC;border-radius:8px;padding:10px;margin-bottom:12px}
-.alt-sim-lbl{font-size:10px;font-weight:700;color:#2D6A4F;text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px}
-.alt-sim input[type=range]{width:100%;accent-color:#2D6A4F}
-.alt-sim-val{font-size:11px;color:#2D6A4F;margin-top:4px;font-weight:500}
-
-/* ── Loader ──────────────────────────────────────────── */
-.loader{position:absolute;inset:0;background:rgba(255,255,255,.92);display:none;flex-direction:column;align-items:center;justify-content:center;z-index:999;border-radius:inherit}
-.spinner{width:36px;height:36px;border:3px solid #E5E8EE;border-top-color:#2D6A4F;border-radius:50%;animation:spin 1s linear infinite;margin-bottom:12px}
-@keyframes spin{to{transform:rotate(360deg)}}
-.loader p{font-size:13px;font-weight:600;color:#1A1A2E}
-.loader small{font-size:11px;color:#8B93A1;margin-top:3px}
-
-/* ── Bottom nav ──────────────────────────────────────── */
-.bottom-nav{position:sticky;bottom:0;background:#FFFFFF;border-top:1px solid #E5E8EE;display:flex;justify-content:space-around;padding:10px 0 12px;flex-shrink:0}
-.nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:10px;color:#8B93A1;font-weight:500;border:none;background:none;font-family:'Inter',sans-serif;padding:0 12px}
-.nav-btn.active{color:#2D6A4F;font-weight:600}
-.nav-btn svg{width:20px;height:20px}
-
-/* ── Add-slot button ─────────────────────────────────── */
-.add-slot-btn{width:100%;padding:10px;background:#EBF5EF;border:1px solid #86EFAC;border-radius:8px;font-size:12px;font-weight:600;color:#2D6A4F;cursor:pointer;font-family:'Inter',sans-serif;margin-bottom:10px;transition:background .15s}
-.add-slot-btn:hover{background:#D1FAE5}
-
-/* ── Modal ───────────────────────────────────────────── */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:2000;align-items:flex-end;justify-content:center}
-.modal-bg.show{display:flex}
-.modal-box{background:#FFFFFF;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:430px;animation:slideUp .22s ease}
-@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.modal-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
-.modal-hdr h3{font-size:15px;font-weight:700;color:#1A1A2E}
-.modal-close{width:28px;height:28px;border:1px solid #E5E8EE;border-radius:50%;background:#F7F8FA;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8B93A1}
-.m-field{margin-bottom:12px}
-.m-field label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#8B93A1;letter-spacing:.3px;margin-bottom:5px}
-.m-field input,.m-field select{width:100%;padding:9px 11px;border:1px solid #E5E8EE;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;color:#1A1A2E;background:#FFFFFF}
-.m-field input:focus,.m-field select:focus{outline:none;border-color:#52A878}
-.m-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.btn-modal-save{width:100%;padding:11px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;margin-top:4px}
-</style>
+<link rel="stylesheet" href="css/lecturer_app.css">
 </head>
 <body>
 <div class="frame">
@@ -471,7 +292,7 @@ body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:
     <!-- ════════════════════════════════════════════════ -->
     <!--  PANEL B — WEEKLY TIMETABLE + CALENDAR         -->
     <!-- ════════════════════════════════════════════════ -->
-    <div id="panelWeek" style="display:none">
+    <div id="panelWeek" class="d-none">
 
       <!-- Calendar grid -->
       <div class="cal-wrap">
@@ -836,7 +657,7 @@ function renderWT(wn, wy) {
             day_cls.forEach(c => {
                 const st = c.scheduled_start_time.slice(0,5);
                 const et = c.scheduled_end_time.slice(0,5);
-                const done = c.status === 'completed' ? '<span class="badge b-done" style="font-size:9px;margin-left:5px">Done</span>' : '';
+                const done = c.status === 'completed' ? '<span class="badge b-done b-done-sm">Done</span>' : '';
                 html += `<div class="wt-row">
                     <div class="wt-time">${st}&#8211;${et}</div>
                     <div>
