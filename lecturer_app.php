@@ -96,7 +96,7 @@ $is_shift_active = $today_shift && $today_shift['sign_out_time'] === null;
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -108,7 +108,7 @@ if ('serviceWorker' in navigator) {
 </script>
 <link rel="stylesheet" href="css/lecturer_app.css">
 </head>
-<body>
+<body class="light">
 <div class="frame">
 
   <!-- Loader -->
