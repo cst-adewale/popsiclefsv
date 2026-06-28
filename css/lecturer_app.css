@@ -179,4 +179,4 @@ body{font-family:'Inter',sans-serif;background:#F7F8FA;min-height:100vh;display:
 .btn-modal-save{width:100%;padding:11px;background:#2D6A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;margin-top:4px}
 
 /* ── Utility Classes ─────────────────────────────────── */
-.d-none{display:none !important}
+.d-none{display:none}
