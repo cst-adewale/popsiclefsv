@@ -86,8 +86,8 @@ if (isset($_GET['get_lecturer_details'])) {
         $stmt = $conn->prepare("SELECT sign_in_time,sign_in_latitude,sign_in_longitude,sign_in_altitude,sign_out_time,sign_out_latitude,sign_out_longitude,sign_out_altitude,sign_out_method FROM lecturer_shifts WHERE lecturer_id=? AND work_date=?");
         $stmt->execute([$lid,$date]);
         $shift = $stmt->fetch() ?: null;
-        $stmt = $conn->prepare("SELECT latitude,longitude,altitude,logged_at FROM lecturer_location_logs WHERE lecturer_id=? AND CAST(logged_at AS DATE)=? ORDER BY logged_at ASC");
-        $stmt->execute([$lid,$date]);
+        $stmt = $conn->prepare("SELECT latitude,longitude,altitude,logged_at FROM lecturer_location_logs WHERE lecturer_id=? AND logged_at >= ?::date AND logged_at < ?::date + INTERVAL '1 day' ORDER BY logged_at ASC");
+        $stmt->execute([$lid,$date,$date]);
         $movement = $stmt->fetchAll();
         sendJsonResponse(['profile'=>$profile,'schedule'=>$schedule,'shift'=>$shift,'movement'=>$movement]);
     } catch (PDOException $e) { sendJsonResponse(['error'=>$e->getMessage()],500); }
@@ -582,8 +582,18 @@ function switchPanel(panelId, el) {
 /* ── Coordinate picker map ───────────────────────────────── */
 let pickerMap = null, selectedMarker = null;
 function initPickerMap() {
-  pickerMap = L.map('picker-map').setView([6.5244, 3.3792], 10);
+  pickerMap = L.map('picker-map').setView([6.6690, 3.6360], 15);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(pickerMap);
+  const boundary = [
+    [6.6633430, 3.6325130],
+    [6.6710955, 3.6324759],
+    [6.6747292, 3.6353989],
+    [6.6719426, 3.6387941],
+    [6.6684207, 3.6412831],
+    [6.6657975, 3.6388637],
+    [6.6636947, 3.6345959]
+  ];
+  L.polygon(boundary, {color:'#8B5CF6', weight:1.5, fillOpacity:0.02}).addTo(pickerMap);
   pickerMap.on('click', function(e) {
     document.getElementById('latitude').value  = e.latlng.lat.toFixed(7);
     document.getElementById('longitude').value = e.latlng.lng.toFixed(7);
@@ -596,8 +606,18 @@ function initPickerMap() {
 /* ── Live tracker map ────────────────────────────────────── */
 let trackerMap = null, trackerMarkers = {};
 function initTrackerMap() {
-  trackerMap = L.map('tracker-map').setView([6.5244, 3.3792], 12);
+  trackerMap = L.map('tracker-map').setView([6.6690, 3.6360], 15);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(trackerMap);
+  const boundary = [
+    [6.6633430, 3.6325130],
+    [6.6710955, 3.6324759],
+    [6.6747292, 3.6353989],
+    [6.6719426, 3.6387941],
+    [6.6684207, 3.6412831],
+    [6.6657975, 3.6388637],
+    [6.6636947, 3.6345959]
+  ];
+  L.polygon(boundary, {color:'#8B5CF6', weight:2, fillColor:'#8B5CF6', fillOpacity:0.05}).addTo(trackerMap);
   fetchLivePings();
   setInterval(fetchLivePings, 10000);
 }
@@ -668,8 +688,18 @@ async function loadLecturerDetails(lecId) {
     document.getElementById('ldScheduleBody').innerHTML = rows;
     // Movement map
     if (!movementMap) {
-      movementMap = L.map('lecturerMovementMap').setView([6.6718, 3.4908], 15);
+      movementMap = L.map('lecturerMovementMap').setView([6.6690, 3.6360], 15);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(movementMap);
+      const boundary = [
+        [6.6633430, 3.6325130],
+        [6.6710955, 3.6324759],
+        [6.6747292, 3.6353989],
+        [6.6719426, 3.6387941],
+        [6.6684207, 3.6412831],
+        [6.6657975, 3.6388637],
+        [6.6636947, 3.6345959]
+      ];
+      L.polygon(boundary, {color:'#8B5CF6', weight:1.5, fillOpacity:0.02}).addTo(movementMap);
     }
     movementMarkers.forEach(m => m.removeFrom(movementMap));
     movementMarkers = [];
@@ -685,7 +715,7 @@ async function loadLecturerDetails(lecId) {
       movementMap.fitBounds(movementPolyline.getBounds().pad(0.15));
       document.getElementById('ldMovementCount').textContent = `${data.movement.length} location points recorded`;
     } else {
-      movementMap.setView([6.6718, 3.4908], 15);
+      movementMap.setView([6.6690, 3.6360], 15);
       document.getElementById('ldMovementCount').textContent = 'No movement data for this date.';
     }
   } catch(e) { console.error(e); }

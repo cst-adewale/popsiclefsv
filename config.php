@@ -29,9 +29,39 @@ define('ENABLE_LOGS', true);
 define('TIMEZONE', 'Africa/Lagos');
 
 // Caleb University Imota Campus Center Geofence
-define('CAMPUS_LAT', 6.67180000);
-define('CAMPUS_LON', 3.49080000);
-define('CAMPUS_RADIUS_METERS', 800);
+define('CAMPUS_LAT', 6.66900000);
+define('CAMPUS_LON', 3.63600000);
+define('CAMPUS_RADIUS_METERS', 1200);
+
+/**
+ * Checks if a GPS point (lat, lon) is within the defined boundaries of Caleb University.
+ */
+function isPointInCampusPolygon($lat, $lon) {
+    // Exact polygon boundary points provided by user
+    $polygon = [
+        [6.6633430, 3.6325130],
+        [6.6710955, 3.6324759],
+        [6.6747292, 3.6353989],
+        [6.6719426, 3.6387941],
+        [6.6684207, 3.6412831],
+        [6.6657975, 3.6388637],
+        [6.6636947, 3.6345959]
+    ];
+    
+    $inside = false;
+    $n = count($polygon);
+    for ($i = 0, $j = $n - 1; $i < $n; $j = $i++) {
+        $xi = $polygon[$i][0]; $yi = $polygon[$i][1];
+        $xj = $polygon[$j][0]; $yj = $polygon[$j][1];
+        
+        $intersect = (($yi > $lon) != ($yj > $lon))
+            && ($lat < ($xj - $xi) * ($lon - $yi) / ($yj - $yi) + $xi);
+        if ($intersect) {
+            $inside = !$inside;
+        }
+    }
+    return $inside;
+}
 
 
 // Set timezone in PHP

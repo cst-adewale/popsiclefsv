@@ -139,7 +139,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         body {
-            background: #f7f8fa;
+            background: #f8f9fa;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -149,43 +149,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .register-card {
-            background: #fff;
-            border: 1px solid #e5e8ee;
-            border-radius: 14px;
-            box-shadow: 0 10px 30px rgba(26, 26, 46, 0.04);
+            background: #ffffff;
+            border: 1px solid #dde1e7;
+            border-radius: 18px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.05);
             width: 100%;
-            max-width: 420px;
-            padding: 24px 20px;
-            text-align: center;
+            max-width: 440px;
+            padding: 32px 28px;
             animation: fadeIn 0.4s ease-out;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
+            from { opacity: 0; transform: translateY(12px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
         .logo-area {
-            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 24px;
         }
 
         .logo-icon {
-            font-size: 40px;
-            margin-bottom: 5px;
-            display: inline-block;
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #dde1e7;
+            overflow: hidden;
+            background: #ffffff;
+            margin-bottom: 12px;
+        }
+
+        .logo-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
         }
 
         .logo-area h1 {
-            font-size: 22px;
+            font-size: 20px;
             color: #1a1a2e;
             font-weight: 700;
-            letter-spacing: -0.5px;
+            letter-spacing: -0.3px;
         }
 
         .logo-area p {
-            color: #8b93a1;
-            font-size: 13px;
-            margin-top: 5px;
+            color: #8a95a3;
+            font-size: 12px;
+            margin-top: 4px;
         }
 
         .form-grid {
@@ -203,8 +218,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         .form-group {
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             text-align: left;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
         }
 
         .form-group.full-width {
@@ -219,52 +237,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         label {
             display: block;
-            margin-bottom: 6px;
-            color: #34495e;
+            color: #888888;
             font-weight: 600;
             font-size: 11px;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.4px;
         }
 
         input, select {
             width: 100%;
-            padding: 10px 14px;
-            border: 1px solid #dcdde1;
-            border-radius: 10px;
+            padding: 11px 13px;
+            border: 1px solid #dde1e7;
+            border-radius: 12px;
             font-size: 14px;
-            transition: all 0.2s;
-            background-color: #f8f9fb;
+            transition: all 0.15s;
+            background-color: #ffffff;
+            color: #1a1a2e;
+            outline: none;
         }
 
         input:focus, select:focus {
-            outline: none;
-            border-color: #52a878;
-            background-color: #fff;
-            box-shadow: 0 0 0 4px rgba(82, 168, 120, 0.12);
+            border-color: #8B5CF6;
+            box-shadow: 0 0 0 3px rgba(139,92,246,0.15);
         }
 
         .error-message {
-            background-color: #fab1a0;
-            border-left: 4px solid #d63031;
-            color: #2d3436;
-            padding: 12px;
+            background-color: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #ef4444;
+            padding: 11px 14px;
             border-radius: 10px;
             font-size: 13px;
             text-align: left;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             font-weight: 500;
         }
 
         .success-message {
-            background-color: #55efc4;
-            border-left: 4px solid #00b894;
-            color: #2d3436;
-            padding: 12px;
-            border-radius: 8px;
+            background-color: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.3);
+            color: #10b981;
+            padding: 11px 14px;
+            border-radius: 10px;
             font-size: 13px;
             text-align: left;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             font-weight: 500;
         }
 
@@ -272,34 +289,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             width: 100%;
             padding: 12px;
             border: none;
-            border-radius: 10px;
-            background: #214f3b;
+            border-radius: 12px;
+            background: #8B5CF6;
             color: white;
-            font-size: 15px;
-            font-weight: 600;
+            font-size: 14px;
+            font-weight: 700;
             cursor: pointer;
             transition: all 0.2s;
-            box-shadow: 0 4px 15px rgba(33, 79, 59, 0.18);
-            margin-top: 6px;
+            margin-top: 4px;
         }
 
         .btn-register:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 18px rgba(33, 79, 59, 0.22);
-        }
-
-        .btn-register:active {
-            transform: translateY(0);
+            background: #7C3AED;
         }
 
         .login-link {
             margin-top: 20px;
             font-size: 13px;
-            color: #8b93a1;
+            color: #666666;
+            border-top: 1px solid #dde1e7;
+            padding-top: 18px;
         }
 
         .login-link a {
-            color: #214f3b;
+            color: #8B5CF6;
             text-decoration: none;
             font-weight: 600;
         }
@@ -312,7 +325,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <body>
     <div class="register-card">
         <div class="logo-area">
-            <span class="logo-icon">🏫</span>
+            <div class="logo-icon">
+                <img src="icons/logo.jpg" alt="Caleb FSV Logo">
+            </div>
             <h1>Lecturer Portal</h1>
             <p>Create your attendance verification account</p>
         </div>

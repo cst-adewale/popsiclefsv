@@ -51,10 +51,10 @@ try {
 
     // 3. Geofence premise checking for automatic sign-out (only between 8 AM and 4 PM)
     if ($current_time >= '08:00:00' && $current_time <= '16:00:00') {
-        $distance = calculateHaversineDistance(CAMPUS_LAT, CAMPUS_LON, $latitude, $longitude);
+        $is_inside = isPointInCampusPolygon($latitude, $longitude);
         
         // If they are outside university boundary
-        if ($distance > CAMPUS_RADIUS_METERS) {
+        if (!$is_inside) {
             // Check if signed in but not signed out today
             $stmt_shift = $conn->prepare("
                 SELECT shift_id FROM lecturer_shifts 

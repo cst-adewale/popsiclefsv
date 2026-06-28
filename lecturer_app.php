@@ -443,16 +443,39 @@ window.addEventListener('appinstalled', () => {
 let liveMap = null, liveMarker = null;
 let lastCapturedLat = null, lastCapturedLon = null;
 
+const CALEB_POLYGON = [
+    [6.6633430, 3.6325130],
+    [6.6710955, 3.6324759],
+    [6.6747292, 3.6353989],
+    [6.6719426, 3.6387941],
+    [6.6684207, 3.6412831],
+    [6.6657975, 3.6388637],
+    [6.6636947, 3.6345959]
+];
+
+function isPointInCampus(lat, lon) {
+    let inside = false;
+    for (let i = 0, j = CALEB_POLYGON.length - 1; i < CALEB_POLYGON.length; j = i++) {
+        const xi = CALEB_POLYGON[i][0], yi = CALEB_POLYGON[i][1];
+        const xj = CALEB_POLYGON[j][0], yj = CALEB_POLYGON[j][1];
+        const intersect = ((yi > lon) !== (yj > lon))
+            && (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
 function initLiveMap() {
     if (liveMap) return; // already initialised
-    liveMap = L.map('live-map').setView([6.6718, 3.4908], 17);
+    // Center at the middle of the polygon
+    liveMap = L.map('live-map').setView([6.6690, 3.6360], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '© OpenStreetMap'}).addTo(liveMap);
 
-    // Draw the 800 m campus geofence boundary ring
-    L.circle([6.6718, 3.4908], {
-        radius: 800,
+    // Draw the campus polygon geofence boundary
+    L.polygon(CALEB_POLYGON, {
         color: '#8B5CF6',
         weight: 2,
+        fillColor: '#8B5CF6',
         fillOpacity: 0.05
     }).addTo(liveMap);
 }
@@ -475,6 +498,30 @@ function updateLiveMap(lat, lon) {
     liveMap.setView([lat, lon], 17);
     const hint = document.getElementById('liveMapHint');
     if (hint) hint.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+
+    // Update geofence warning banner status
+    const isInside = isPointInCampus(lat, lon);
+    const banner = document.getElementById('liveTrackingStatus');
+    const statusText = document.getElementById('liveStatusText');
+    const statusSub = document.getElementById('liveStatusSub');
+    
+    if (banner && statusText && statusSub) {
+        if (isShiftActive) {
+            if (isInside) {
+                banner.className = 'tracking-status-banner tracking-active';
+                statusText.textContent = 'Live Tracking Active';
+                statusSub.textContent = 'Admin is viewing your real-time campus coordinate updates.';
+            } else {
+                banner.className = 'tracking-status-banner tracking-inactive';
+                statusText.textContent = 'Tracking Suspended (Outside Campus)';
+                statusSub.textContent = 'You are outside Caleb University boundaries. Please return to campus.';
+            }
+        } else {
+            banner.className = 'tracking-status-banner tracking-inactive';
+            statusText.textContent = 'Tracking Inactive';
+            statusSub.textContent = 'Sign in to start live location updates.';
+        }
+    }
 }
 
 function recenterLiveMap() {
@@ -482,8 +529,8 @@ function recenterLiveMap() {
     if (lastCapturedLat !== null && lastCapturedLon !== null) {
         liveMap.setView([lastCapturedLat, lastCapturedLon], 17);
     } else {
-        // Fallback to campus center if user position hasn't been fetched yet
-        liveMap.setView([6.6718, 3.4908], 17);
+        // Fallback to center of polygon
+        liveMap.setView([6.6690, 3.6360], 15);
     }
 }
 

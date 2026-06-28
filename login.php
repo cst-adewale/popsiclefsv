@@ -66,8 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 body{font-family:'Outfit',sans-serif;background:#f8f9fa;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#1a1a2e}
 .login-wrap{width:100%;max-width:390px;padding:16px}
 .logo-row{display:flex;align-items:center;gap:12px;margin-bottom:36px;justify-content:center}
-.logo-icon{width:40px;height:40px;background:#65FE08;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid #000000}
-.logo-icon svg{width:22px;height:22px;stroke:#000000}
+.logo-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;border:1px solid #dde1e7;overflow:hidden;background:#ffffff;flex-shrink:0}
+.logo-icon img{width:100%;height:100%;object-fit:cover}
 .logo-name{font-size:18px;font-weight:700;color:#1a1a2e;letter-spacing:-0.2px}
 .logo-sub{font-size:11px;color:#8a95a3;font-weight:400}
 .card{background:#ffffff;border:1px solid #dde1e7;border-radius:18px;padding:32px 28px;box-shadow:0 8px 30px rgba(0,0,0,0.05)}
@@ -76,24 +76,24 @@ body{font-family:'Outfit',sans-serif;background:#f8f9fa;min-height:100vh;display
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
 .field label{font-size:11px;font-weight:600;color:#888888;text-transform:uppercase;letter-spacing:.4px}
 .field input{padding:11px 13px;border:1px solid #dde1e7;border-radius:12px;font-size:14px;font-family:'Outfit',sans-serif;color:#1a1a2e;background:#ffffff;outline:none;transition:all .15s}
-.field input:focus{border-color:#65FE08;box-shadow:0 0 0 3px rgba(101,254,8,0.15)}
+.field input:focus{border-color:#8B5CF6;box-shadow:0 0 0 3px rgba(139,92,246,0.15)}
 .field input::placeholder{color:#b0b8c8}
-.btn-submit{width:100%;padding:12px;background:#65FE08;color:#000000;border:1px solid #000000;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;margin-top:4px}
-.btn-submit:hover{background:#4dd400}
+.btn-submit{width:100%;padding:12px;background:#8B5CF6;color:#ffffff;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:'Outfit',sans-serif;transition:all .2s;margin-top:4px}
+.btn-submit:hover{background:#7C3AED}
 .error-box{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:11px 14px;font-size:13px;color:#f87171;margin-bottom:18px;display:flex;align-items:center;gap:8px}
 .error-box svg{flex-shrink:0;width:15px;height:15px}
-.divider{border:none;border-top:1px solid #1e1e1e;margin:20px 0}
+.divider{border:none;border-top:1px solid #dde1e7;margin:20px 0}
 .register-link{text-align:center;font-size:13px;color:#666666}
-.register-link a{color:#65FE08;font-weight:600;text-decoration:none}
+.register-link a{color:#8B5CF6;font-weight:600;text-decoration:none}
 .register-link a:hover{text-decoration:underline}
-.footer-note{text-align:center;font-size:11px;color:#444444;margin-top:18px}
+.footer-note{text-align:center;font-size:11px;color:#8a95a3;margin-top:18px}
 </style>
 </head>
 <body>
 <div class="login-wrap">
   <div class="logo-row">
     <div class="logo-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+      <img src="icons/logo.jpg" alt="Caleb FSV Logo">
     </div>
     <div>
       <div class="logo-name">Caleb FSV</div>
