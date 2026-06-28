@@ -53,8 +53,16 @@ for ($i = -4; $i <= 4; $i++) {
     $week_navigation[] = [
         'key' => $weekKey,
         'label' => $weekNavigationLabel,
-        'active' => $weekKey === $selected_week
+        'active' => $weekKey === $selected_week,
+        'offset' => $i
     ];
+}
+$selectedWeekIndex = 0;
+foreach ($week_navigation as $idx => $navWeek) {
+    if ($navWeek['active']) {
+        $selectedWeekIndex = $idx;
+        break;
+    }
 }
 
 // Get classes scheduled for today using PostgreSQL PDO syntax
@@ -207,6 +215,23 @@ $week_classes = $stmt_week->fetchAll();
             background: rgba(255, 255, 255, 0.3);
         }
 
+        .install-btn {
+            background: #ffffff;
+            color: #214f3b;
+            border: 1px solid rgba(255,255,255,0.35);
+            padding: 6px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            text-decoration: none;
+            display: none;
+        }
+
+        .install-btn:hover {
+            background: #f3f7f4;
+        }
+
         /* Content Area */
         .app-content {
             flex: 1;
@@ -240,6 +265,111 @@ $week_classes = $stmt_week->fetchAll();
         .class-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+        }
+
+        .calendar-shell {
+            background: #fff;
+            border: 1px solid #e5e8ee;
+            border-radius: 14px;
+            padding: 12px;
+            box-shadow: 0 6px 18px rgba(26,26,46,0.04);
+            margin-bottom: 12px;
+        }
+
+        .calendar-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .calendar-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(120px, 1fr));
+            gap: 8px;
+            overflow-x: auto;
+        }
+
+        .day-col {
+            min-width: 120px;
+            border: 1px solid #e5e8ee;
+            border-radius: 12px;
+            background: #fafbfc;
+            overflow: hidden;
+        }
+
+        .day-col.active {
+            border-color: #214f3b;
+            box-shadow: 0 8px 18px rgba(33,79,59,0.08);
+        }
+
+        .day-head {
+            padding: 8px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #fff;
+            background: linear-gradient(135deg, #214f3b, #3a7bd5);
+        }
+
+        .day-body {
+            padding: 8px;
+            min-height: 120px;
+        }
+
+        .day-empty {
+            font-size: 12px;
+            color: #8b93a1;
+            padding: 10px 2px;
+        }
+
+        .day-event {
+            background: #fff;
+            border: 1px solid #e5e8ee;
+            border-left: 4px solid #214f3b;
+            border-radius: 10px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+
+        .day-event-time {
+            font-size: 11px;
+            color: #3a7bd5;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .day-event-code {
+            font-size: 12px;
+            font-weight: 700;
+            color: #1a1a2e;
+        }
+
+        .day-event-venue {
+            font-size: 11px;
+            color: #8b93a1;
+            margin-top: 2px;
+        }
+
+        .calendar-nav-btn {
+            border: 1px solid #e5e8ee;
+            background: #fff;
+            color: #1a1a2e;
+            border-radius: 10px;
+            padding: 8px 10px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .calendar-nav-btn:hover {
+            background: #f7f8fa;
         }
 
         .class-card.completed {
@@ -686,7 +816,10 @@ $week_classes = $stmt_week->fetchAll();
                     <p>Welcome back,</p>
                     <h2><?php echo htmlspecialchars($full_name); ?></h2>
                 </div>
-                <a href="logout.php" class="logout-btn">Log Out</a>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+                    <button id="installAppBtn" class="install-btn" type="button">Install App</button>
+                    <a href="logout.php" class="logout-btn">Log Out</a>
+                </div>
             </div>
             <div style="font-size: 12px; opacity: 0.9; display: flex; align-items: center; gap: 5px;">
                 <span>📅 Today:</span> <strong><?php echo date('F d, Y'); ?></strong>
@@ -778,58 +911,80 @@ $week_classes = $stmt_week->fetchAll();
                 <div id="weekScheduleTab" style="display: none;">
                     <div class="section-title">Weekly Monday - Friday Timetable</div>
                     <div style="font-size:12px;color:#8B93A1;margin-bottom:10px">Pick an ISO week number first, then review the timetable for that week.</div>
-                    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px">
-                        <?php foreach ($week_navigation as $navWeek): ?>
-                            <a href="lecturer_app.php?week=<?php echo urlencode($navWeek['key']); ?>#weekScheduleTab" style="text-decoration:none;flex:0 0 auto;">
-                                <div style="padding:10px 12px;border:1px solid <?php echo $navWeek['active'] ? '#214F3B' : '#E5E8EE'; ?>;border-radius:12px;background:<?php echo $navWeek['active'] ? '#214F3B' : '#fff'; ?>;color:<?php echo $navWeek['active'] ? '#fff' : '#1A1A2E'; ?>;min-width:120px;text-align:center;box-shadow:0 4px 12px rgba(26,26,46,0.04)">
-                                    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;opacity:.75">Week</div>
-                                    <div style="font-size:15px;font-weight:700"><?php echo htmlspecialchars($navWeek['label']); ?></div>
-                                </div>
-                            </a>
-                        <?php endforeach; ?>
+                    <div class="calendar-shell">
+                        <div class="calendar-head">
+                            <a class="calendar-nav-btn" href="lecturer_app.php?week=<?php echo urlencode($week_navigation[max(0, $selectedWeekIndex - 1)]['key']); ?>#weekScheduleTab">← Prev</a>
+                            <div class="calendar-title">Week <?php echo htmlspecialchars(explode(' ', $week_navigation[$selectedWeekIndex]['label'])[0]); ?></div>
+                            <a class="calendar-nav-btn" href="lecturer_app.php?week=<?php echo urlencode($week_navigation[min(count($week_navigation) - 1, $selectedWeekIndex + 1)]['key']); ?>#weekScheduleTab">Next →</a>
+                        </div>
+                        <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:8px">
+                            <?php foreach ($week_navigation as $navWeek): ?>
+                                <a href="lecturer_app.php?week=<?php echo urlencode($navWeek['key']); ?>#weekScheduleTab" style="text-decoration:none;flex:0 0 auto;">
+                                    <div style="padding:8px 10px;border:1px solid <?php echo $navWeek['active'] ? '#214F3B' : '#E5E8EE'; ?>;border-radius:12px;background:<?php echo $navWeek['active'] ? '#214F3B' : '#fff'; ?>;color:<?php echo $navWeek['active'] ? '#fff' : '#1A1A2E'; ?>;min-width:110px;text-align:center;box-shadow:0 4px 12px rgba(26,26,46,0.04)">
+                                        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;opacity:.75">ISO</div>
+                                        <div style="font-size:15px;font-weight:700"><?php echo htmlspecialchars($navWeek['key']); ?></div>
+                                        <div style="font-size:11px;opacity:.8;margin-top:2px"><?php echo htmlspecialchars($navWeek['label']); ?></div>
+                                    </div>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
                     </div>
                     
                     <?php
-                    $grouped_days = [];
-                    foreach ($week_classes as $class) {
-                        $date_key = $class['scheduled_date'];
-                        if (!isset($grouped_days[$date_key])) {
-                            $grouped_days[$date_key] = [
-                                'label' => date('l, M j, Y', strtotime($date_key)),
-                                'classes' => []
-                            ];
-                        }
-                        $grouped_days[$date_key]['classes'][] = $class;
+                    $days_map = [
+                        1 => 'Monday',
+                        2 => 'Tuesday',
+                        3 => 'Wednesday',
+                        4 => 'Thursday',
+                        5 => 'Friday'
+                    ];
+                    $days_payload = [];
+                    foreach ($days_map as $dayNum => $dayName) {
+                        $date = date('Y-m-d', strtotime($week_start_date . ' +' . ($dayNum - 1) . ' days'));
+                        $days_payload[] = [
+                            'name' => $dayName,
+                            'date' => $date,
+                            'classes' => array_values(array_filter($week_classes, function($c) use ($date) {
+                                return $c['scheduled_date'] === $date;
+                            }))
+                        ];
                     }
-                    
-                    if (empty($grouped_days)):
+                    if (empty($week_classes)):
                     ?>
                         <div style="padding: 10px; font-size: 12px; color: #bdc3c7; background: white; border-radius: 8px; margin-top: 5px;">No classes scheduled</div>
                     <?php else: ?>
-                        <?php foreach ($grouped_days as $date_key => $dayData): ?>
-                            <div class="timetable-day-header"><?php echo htmlspecialchars($dayData['label']); ?></div>
-                            <div style="background: white; border-radius: 8px; overflow: hidden; margin-top: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                                <?php foreach ($dayData['classes'] as $class): ?>
-                                    <div class="timetable-item">
-                                        <div class="timetable-time">
-                                            <?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?>
+                        <div class="calendar-shell">
+                            <div class="week-grid">
+                                <?php foreach ($days_payload as $day): ?>
+                                    <div class="day-col <?php echo $day['date'] === date('Y-m-d') ? 'active' : ''; ?>">
+                                        <div class="day-head">
+                                            <?php echo htmlspecialchars($day['name']); ?>
+                                            <div style="font-size:10px;opacity:.8;text-transform:none;font-weight:500"><?php echo date('M j', strtotime($day['date'])); ?></div>
                                         </div>
-                                        <div class="timetable-details">
-                                            <strong><?php echo htmlspecialchars($class['course_code']); ?></strong><br>
-                                            <span style="font-size: 11px; color: #7f8c8d;"><?php echo htmlspecialchars($class['hall_name']); ?></span>
-                                        </div>
-                                        <div class="timetable-actions">
-                                            <?php if ($class['scheduled_date'] === date('Y-m-d') && $class['status'] !== 'completed'): ?>
-                                            <button class="btn-small btn-edit" onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">Attend</button>
+                                        <div class="day-body">
+                                            <?php if (empty($day['classes'])): ?>
+                                                <div class="day-empty">No classes</div>
+                                            <?php else: ?>
+                                                <?php foreach ($day['classes'] as $class): ?>
+                                                    <div class="day-event">
+                                                        <div class="day-event-time"><?php echo date('H:i', strtotime($class['scheduled_start_time'])) . ' - ' . date('H:i', strtotime($class['scheduled_end_time'])); ?></div>
+                                                        <div class="day-event-code"><?php echo htmlspecialchars($class['course_code']); ?></div>
+                                                        <div class="day-event-venue"><?php echo htmlspecialchars($class['hall_name']); ?></div>
+                                                        <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+                                                            <?php if ($class['scheduled_date'] === date('Y-m-d') && $class['status'] !== 'completed'): ?>
+                                                                <button class="btn-small btn-edit" onclick="selectClass(<?php echo htmlspecialchars(json_encode($class)); ?>)">Attend</button>
+                                                            <?php endif; ?>
+                                                            <button class="btn-small btn-edit" onclick="openEditScheduleModal(<?php echo htmlspecialchars(json_encode($class)); ?>)">Edit</button>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
                                             <?php endif; ?>
-                                            <button class="btn-small btn-edit" onclick="openEditScheduleModal(<?php echo htmlspecialchars(json_encode($class)); ?>)">Edit</button>
-                                            <button class="btn-small btn-delete" onclick="deleteScheduleSlot(<?php echo $class['class_id']; ?>)">Del</button>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
-                        <?php endforeach; ?>
                     <?php endif; ?>
+                    </div>
                     
                     <button class="btn-create-slot" onclick="openCreateScheduleModal()">+ Add New Class Slot</button>
                 </div>
@@ -965,6 +1120,29 @@ $week_classes = $stmt_week->fetchAll();
     <!-- Leaflet JS Map Library -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
+        let deferredInstallPrompt = null;
+
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            deferredInstallPrompt = event;
+            const btn = document.getElementById('installAppBtn');
+            if (btn) btn.style.display = 'inline-flex';
+        });
+
+        window.addEventListener('appinstalled', () => {
+            deferredInstallPrompt = null;
+            const btn = document.getElementById('installAppBtn');
+            if (btn) btn.style.display = 'none';
+        });
+
+        document.getElementById('installAppBtn')?.addEventListener('click', async () => {
+            if (!deferredInstallPrompt) return;
+            deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+            document.getElementById('installAppBtn').style.display = 'none';
+        });
+
         let currentClass = null;
         let map = null;
         let userMarker = null;

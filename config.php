@@ -37,6 +37,18 @@ define('CAMPUS_RADIUS_METERS', 800);
 // Set timezone in PHP
 date_default_timezone_set(TIMEZONE);
 
+// Make the session cookie stable across refreshes and PWA launches.
+$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path' => '/',
+        'secure' => $isHttps,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+}
+
 // Create connection using PDO (Supabase PostgreSQL)
 try {
     $dbUrl = getenv('DATABASE_URL') ?: '';
