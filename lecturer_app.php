@@ -100,7 +100,7 @@ $is_shift_active = $today_shift && $today_shift['sign_out_time'] === null;
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        navigator.serviceWorker.register('sw.js')
             .then(r  => console.log('[PWA] SW:', r.scope))
             .catch(er => console.warn('[PWA] SW failed:', er));
     });

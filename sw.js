@@ -3,15 +3,16 @@
  * sw.js - Service Worker for PWA offline support and caching
  */
 
-const CACHE_NAME = 'caleb-fsv-pwa-v1';
+const CACHE_NAME = 'caleb-fsv-pwa-v2';
 
-// Core assets to cache for offline access
+// Core assets to cache for offline access (using relative paths for subdirectory compatibility)
 const PRECACHE_ASSETS = [
-    '/lecturer_app.php',
-    '/login.php',
-    '/manifest.json',
-    '/icons/icon-192.png',
-    '/icons/icon-512.png',
+    'lecturer_app.php',
+    'login.php',
+    'manifest.json',
+    'icons/icon-192.png',
+    'icons/icon-512.png',
+    'icons/logo.jpg',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
     'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
@@ -76,7 +77,7 @@ self.addEventListener('fetch', (event) => {
                         return cachedResponse;
                     }
                     // Fallback for uncached navigation requests
-                    return caches.match('/lecturer_app.php');
+                    return caches.match('lecturer_app.php');
                 });
             })
     );
